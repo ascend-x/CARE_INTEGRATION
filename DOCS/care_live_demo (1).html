@@ -1,0 +1,102 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>C.A.R.E. — Live ICU Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F5F8FC;--card:#fff;--ink:#0B2545;--mut:#5B6B82;--line:#E1E8F2;--blue:#2F6FED;--teal:#13A89E;--red:#E5484D;--amb:#F5A524;--vio:#7C5CFA;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}body{margin:0;font-family:Lexend,system-ui,Arial,sans-serif;color:var(--ink);background:var(--bg) radial-gradient(#cfdaec 1.2px,transparent 1.3px) 0 0/26px 26px;font-size:14px}
+.wrap{max-width:1360px;margin:0 auto;padding:18px}
+.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
+.logo{width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--teal));color:#fff;display:grid;place-items:center;font-weight:700;font-size:22px}
+h1{font-size:22px;margin:0}h1 small{display:block;font-size:12px;font-weight:400;color:var(--mut)}
+.sp{flex:1}.pill{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--line);border-radius:99px;padding:6px 12px;font-size:12px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--teal);animation:pl 1.6s infinite}
+@keyframes pl{0%{box-shadow:0 0 0 0 rgba(19,168,158,.5)}100%{box-shadow:0 0 0 9px rgba(19,168,158,0)}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 2px 10px rgba(11,37,69,.04)}
+.card h2{font-size:13px;margin:0 0 10px;color:var(--mut);letter-spacing:.06em;text-transform:uppercase}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:12px}
+.kpi b{display:block;font-size:30px;line-height:1.1}.kpi span{font-size:12px;color:var(--mut)}
+.grid{display:grid;grid-template-columns:270px 1fr 370px;gap:12px;align-items:start}
+.bed{border:1.5px solid var(--line);border-radius:12px;padding:10px;margin-bottom:8px;cursor:pointer;position:relative;transition:.25s;background:#fff}
+.bed:hover{transform:translateY(-2px)}.bed.sel{border-color:var(--blue);box-shadow:0 0 0 3px rgba(47,111,237,.12)}
+.bed span{display:block;font-size:11px;color:var(--mut)}.bed .v{font-size:12px;margin-top:4px}
+.bed:before{content:"";position:absolute;right:10px;top:12px;width:10px;height:10px;border-radius:50%;background:var(--teal)}
+.bed.watch:before{background:var(--amb)}.bed.crit:before{background:var(--red);animation:pl2 1s infinite}
+@keyframes pl2{0%{box-shadow:0 0 0 0 rgba(229,72,77,.6)}100%{box-shadow:0 0 0 10px rgba(229,72,77,0)}}
+.bd{position:absolute;right:8px;bottom:8px;background:var(--ink);color:#fff;font-style:normal;font-size:10px;border-radius:99px;padding:1px 7px}
+canvas{width:100%;height:230px;display:block;background:linear-gradient(#fff,#fbfdff);border:1px solid var(--line);border-radius:12px}
+.vit{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0}
+.vit div{background:#F3F7FD;border-radius:10px;padding:8px}.vit small{color:var(--mut);font-size:11px}.vit b{display:block;font-size:22px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#safe{border:1.5px dashed var(--red);border-radius:12px;padding:10px;background:#FFF6F6;font-size:12px;transition:.2s}
+#safe.ring{background:var(--red);color:#fff;animation:sh .25s 4}
+@keyframes sh{50%{transform:translateX(3px)}}
+#nat{list-style:none;margin:0;padding:0;font-size:12px;color:var(--ink)}#nat li{padding:4px 0;border-bottom:1px solid var(--line);animation:in .4s}
+.inc{border-radius:12px;border:1px solid var(--line);border-left:5px solid var(--amb);padding:11px;margin-bottom:10px;animation:in .5s}
+@keyframes in{from{opacity:0;transform:translateY(-10px)}}
+.inc.real{border-left-color:var(--red);background:#FFF8F8}.inc.tech{border-left-color:var(--vio)}.inc.adv{border-left-color:var(--blue)}
+.vd{display:inline-block;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:99px;background:#FFF2D9;color:#8a5a00}
+.real .vd{background:#FFE3E4;color:#b3262b}.tech .vd{background:#EEE8FF;color:#5a3fd6}.adv .vd{background:#E3EDFF;color:#1d4fc0}
+.inc h3{font-size:14px;margin:6px 0 4px}.inc p{margin:4px 0;font-size:12px;color:var(--mut)}
+.ch{display:inline-block;font-size:11px;background:#F3F7FD;border:1px solid var(--line);border-radius:99px;padding:2px 8px;margin:2px 3px 2px 0}
+.al{font-size:11.5px;border-top:1px dashed var(--line);margin-top:6px;padding-top:5px;color:var(--ink)}
+.pipe{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:10px}
+.st{border:1.5px solid var(--line);border-radius:12px;padding:9px;background:#fff;transition:.3s;font-size:12px}.st b{display:block;font-size:13px}.st small{color:var(--mut);font-size:11px}
+.st.on{border-color:var(--blue);background:#EEF4FF;transform:translateY(-4px);box-shadow:0 6px 14px rgba(47,111,237,.2)}.st.done{border-color:var(--teal);background:#EAF8F6}
+.btns{display:flex;gap:8px;flex-wrap:wrap}button{font:inherit;font-size:13px;font-weight:600;border:1.5px solid var(--line);background:#fff;border-radius:10px;padding:9px 13px;cursor:pointer;transition:.2s;color:var(--ink)}
+button:hover{border-color:var(--blue);transform:translateY(-2px)}button.pri{background:var(--blue);color:#fff;border-color:var(--blue)}
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px}.how p{margin:6px 0 0;color:var(--mut);font-size:13px;line-height:1.5}
+.foot{text-align:center;color:var(--mut);font-size:12px;margin:16px 0 4px}
+@media(max-width:1050px){.grid,.how{grid-template-columns:1fr}.kpis{grid-template-columns:1fr 1fr}.pipe{grid-template-columns:repeat(2,1fr)}.vit{grid-template-columns:repeat(3,1fr)}}
+</style></head><body><div class="wrap">
+<div class="top"><div class="logo">C</div><h1>C.A.R.E.<small>Clinical Action &amp; Response Engine · Live ICU simulation</small></h1><div class="sp"></div>
+<div class="pill"><i class="dot"></i>Edge online</div><div class="pill"><i class="dot"></i>Core online</div><div class="pill"><i class="dot"></i>Safety path armed</div><div class="pill" id="clk">--:--:--</div></div>
+<div class="kpis"><div class="card kpi"><b id="kR">0</b><span>Native alarms raised</span></div><div class="card kpi"><b id="kS">0</b><span>Incidents shown to nurses</span></div><div class="card kpi"><b id="kP" style="color:var(--teal)">—</b><span>Notification noise reduced</span></div><div class="card kpi"><b style="color:var(--red)">0</b><span>True alarms lost · every native alarm sounded</span></div></div>
+<div class="grid">
+<div class="card"><h2>ICU bed overview</h2><div id="beds"></div></div>
+<div class="card"><h2 id="fh">Bed</h2><canvas id="wave"></canvas>
+<div class="vit"><div><small>Heart rate</small><b id="vH">-</b></div><div><small>SpO₂</small><b id="vS">-</b></div><div><small>BP</small><b id="vB">-</b></div><div><small>Resp</small><b id="vR">-</b></div><div><small>Shock index</small><b id="vI">-</b></div></div>
+<div class="two"><div><h2>Native bedside alarms</h2><ul id="nat"><li style="color:var(--mut)">No alarms yet</li></ul></div><div><h2>Independent safety path</h2><div id="safe">Watchdog armed. Rings on every native alarm, bypassing correlation.</div></div></div></div>
+<div class="card"><h2>CARE incident feed</h2><div id="feed"><p style="color:var(--mut);font-size:12px">Run a scenario below. Grouped, explained incidents appear here.</p></div></div></div>
+<div class="card" style="margin-top:12px"><h2>Run a scenario on the selected bed</h2><div class="btns"><button class="pri" onclick="full()">▶ Run full demo</button><button onclick="run('motion')">Motion artifact</button><button onclick="run('lead')">Electrode lead-off</button><button onclick="run('desat')">True desaturation</button><button onclick="run('bleed')">Mass casualty · hidden bleed</button></div>
+<div class="pipe" id="pipe"></div></div>
+<div class="how"><div class="card"><h2>1 · Edge cluster</h2><p>Per ICU, works offline. Signal quality, correlation and explanations run here.</p><span class="ch">Python</span><span class="ch">FastAPI</span><span class="ch">MQTT</span><span class="ch">TimescaleDB</span></div>
+<div class="card"><h2>2 · Core cluster</h2><p>Three-node HA in the hospital. Prediction, care-gap checks, routing, FHIR store.</p><span class="ch">Kubernetes</span><span class="ch">Kafka</span><span class="ch">PostgreSQL</span><span class="ch">Keycloak</span></div>
+<div class="card"><h2>3 · The safety rule</h2><p>CARE never delays or silences a native alarm. It downgrades only with two independent proofs, a named cause, and anything uncertain is treated as real.</p></div></div>
+<div class="foot">Simulated patients and data · research prototype · not for clinical use · clinician always decides</div></div>
+<script>
+const $=s=>document.querySelector(s),B=[
+{n:'Bed 1',p:'M · 62 · Post-op',hr:78,sp:97,sy:122,di:78,rr:16},{n:'Bed 2',p:'F · 45 · Sepsis watch',hr:92,sp:96,sy:110,di:70,rr:18},
+{n:'Bed 3',p:'M · 71 · Ventilated',hr:84,sp:95,sy:128,di:80,rr:14},{n:'Bed 4',p:'F · 33 · Post-surgery',hr:80,sp:98,sy:118,di:74,rr:17},
+{n:'Bed 5',p:'M · 29 · Road accident',hr:84,sp:98,sy:118,di:74,rr:18},{n:'Bed 6',p:'F · 58 · Cardiac',hr:70,sp:97,sy:130,di:82,rr:15}];
+B.forEach(b=>{b.base={hr:b.hr,sp:b.sp,sy:b.sy,di:b.di};b.t={...b.base};b.st='ok';b.inc=0});
+let sel=0,ev=[],R=0,S=0;const now=()=>performance.now()/1000,tm=()=>new Date().toLocaleTimeString([], {hour12:false});
+const STEPS=[['Collect','Devices → bedside unit'],['Sync','Clocks aligned'],['Check','Signal quality scored'],['Group','Same cause merged'],['Order','Sequence and lag'],['Explain','Raw signals shown'],['Prioritize','Real events first']];
+$('#pipe').innerHTML=STEPS.map((s,i)=>`<div class="st"><b>${i+1} · ${s[0]}</b><small>${s[1]}</small></div>`).join('');
+function setStep(i){document.querySelectorAll('.st').forEach((e,j)=>e.className='st'+(j<i?' done':j==i?' on':''))}
+function pipe(){STEPS.forEach((_,i)=>setTimeout(()=>setStep(i),i*420));setTimeout(()=>setStep(7),STEPS.length*420)}
+function tiles(){$('#beds').innerHTML=B.map((b,i)=>`<div class="bed ${b.st} ${i==sel?'sel':''}" onclick="pick(${i})"><b>${b.n}</b><span>${b.p}</span><div class="v">HR <b>${Math.round(b.hr)}</b> · SpO₂ <b>${Math.round(b.sp)}%</b></div>${b.inc?`<i class="bd">${b.inc} incident${b.inc>1?'s':''}</i>`:''}</div>`).join('')}
+function pick(i){sel=i;tiles();vit()}
+function vit(){const b=B[sel];$('#fh').textContent=b.n+' · '+b.p;$('#vH').textContent=Math.round(b.hr);$('#vS').textContent=Math.round(b.sp)+'%';$('#vB').textContent=Math.round(b.sy)+'/'+Math.round(b.di);$('#vR').textContent=Math.round(b.rr);const si=b.hr/b.sy;$('#vI').textContent=si.toFixed(2);$('#vI').style.color=si>.9?'var(--red)':''}
+setInterval(()=>{B.forEach(b=>{['hr','sp','sy','di'].forEach(k=>b[k]+=(b.t[k]-b[k])*.35+(Math.random()-.5)*(k=='sp'?.25:.8))});tiles();vit();$('#clk').textContent=tm()},700);
+function kp(){$('#kR').textContent=R;$('#kS').textContent=S;$('#kP').textContent=R?Math.max(0,Math.round((1-S/R)*100))+'%':'—'}
+function alarm(src,txt){R++;kp();const l=$('#nat');if(l.firstChild&&l.firstChild.style)l.innerHTML='';l.insertAdjacentHTML('afterbegin',`<li><b>${tm()}</b> · ${src}: ${txt}</li>`);while(l.children.length>5)l.lastChild.remove();const s=$('#safe');s.className='ring';s.textContent='🔔 Native alarm sounded · safety path rang';setTimeout(()=>{s.className='';s.textContent='Watchdog armed. Rings on every native alarm, bypassing correlation.'},1300)}
+function inc(o){S++;kp();B[o.i].inc++;tiles();$('#feed').querySelectorAll('p').forEach(p=>p.remove());$('#feed').insertAdjacentHTML('afterbegin',`<div class="inc ${o.c}"><span class="vd">${o.v}</span> <span style="float:right;font-size:11px;color:var(--mut)">${B[o.i].n} · ${tm()}</span><h3>${o.t}</h3>${o.a?`<p><b>${o.a}</b></p>`:''}<div>${o.ch.map(x=>`<span class="ch">${x}</span>`).join('')}</div><p>${o.n}</p>${o.al?`<div class="al">${o.al.map(x=>'• '+x).join('<br>')}</div>`:''}</div>`)}
+const T=(ms,f)=>setTimeout(f,ms),st=(i,s)=>{B[i].st=s;tiles()};
+function run(k){if(k=='bleed')pick(4);const i=sel,b=B[i],t0=now();pipe();
+if(k=='motion'){ev.push({b:i,k:'m',s:t0+.2,e:t0+7});st(i,'watch');b.t.sp=72;T(400,()=>alarm('Oximeter','SpO₂ LOW 72%'));T(900,()=>alarm('ECG','NOISE / ARTIFACT'));T(1300,()=>alarm('Pleth','PULSE SIGNAL LOST'));
+T(3200,()=>inc({i,c:'',v:'LIKELY ARTIFACT',t:'Probe motion disturbance',a:'3 alarms → 1 incident · low priority',ch:['Motion spike (IMU)','Pleth amplitude ↓ 80%','ECG heart rate steady','2 independent proofs'],n:'Secondary push held. Bedside alarm still sounded. Re-checks every few seconds and is promoted to real if the signal stays clean.',al:['+0.0 s Oximeter · SpO₂ low 72%','+0.5 s ECG · noise','+0.9 s Pleth · pulse lost']}));T(7200,()=>{b.t.sp=b.base.sp;st(i,'ok')})}
+if(k=='lead'){ev.push({b:i,k:'l',s:t0+.2,e:t0+6});st(i,'watch');T(400,()=>alarm('ECG','ASYSTOLE (life-threatening)'));
+T(2600,()=>inc({i,c:'tech',v:'TECHNICAL · CHECK BED',t:'Probable electrode lead-off',a:'Life-threatening alarm is never downgraded',ch:['Lead-off pin high','Pleth rhythm normal','SpO₂ heart rate 76 steady'],n:'CARE adds a “likely lead-off, check electrode” label and still pushes. The independent buzzer already rang.',al:['+0.0 s ECG · asystole','Cross-check: pleth shows a normal pulse']}));T(6200,()=>st(i,'ok'))}
+if(k=='desat'){st(i,'crit');b.t.sp=86;b.t.hr=104;T(1600,()=>alarm('Oximeter','SpO₂ LOW 90%'));T(3600,()=>alarm('Oximeter','SpO₂ LOW 86%'));
+T(4600,()=>inc({i,c:'real',v:'VERIFIED REAL · HIGH',t:'Progressive desaturation',a:'Immediate push to nurse and charge nurse',ch:['Clean waveform','No motion','ECG heart rate ↑ 78→104','Sustained gradual fall'],n:'True-event evidence present, so CARE does not group it away. Top of the bed grid.',al:['+0.0 s SpO₂ low 90%','+2.0 s SpO₂ low 86%']}));T(12500,()=>{b.t={...b.base};st(i,'ok')})}
+if(k=='bleed'){st(i,'watch');b.t.hr=118;b.t.sy=114;b.t.di=88;T(5200,()=>{st(i,'crit');inc({i,c:'adv',v:'ADVISORY · HIGH',t:'Possible occult haemorrhage',a:'Abdomen and chest not yet evaluated',ch:['HR ↑ 84→118','Pulse pressure 44→26','Shock index &gt; 0.9','No abdominal imaging documented','Mechanism: steering-wheel impact'],n:'Suggest FAST / CT and repeat haemoglobin. CARE prompts, the doctor decides.'})});T(14000,()=>{b.t={...b.base};st(i,'ok')})}}
+function full(){run('motion');T(9000,()=>{pick(0);run('lead')});T(17000,()=>{pick(1);run('desat')});T(30000,()=>run('bleed'))}
+const cv=$('#wave'),cx=cv.getContext('2d');let W,H;
+function size(){const d=devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;cv.width=W*d;cv.height=H*d;cx.setTransform(d,0,0,d,0,0)}addEventListener('resize',size);size();
+const g=(p,c,w)=>Math.exp(-((p-c)**2)/(2*w*w)),ecg=p=>.12*g(p,.18,.025)-.12*g(p,.31,.008)+g(p,.34,.009)-.2*g(p,.37,.008)+.25*g(p,.6,.045),ppg=p=>g(p,.25,.09)+.35*g(p,.55,.07);
+function draw(){const n=now(),b=B[sel],per=60/Math.max(40,b.hr),sp=110;cx.clearRect(0,0,W,H);
+ev.filter(e=>e.b==sel).forEach(e=>{const x1=Math.max(0,W-(n-e.s)*sp),x2=Math.min(W,W-(n-e.e)*sp);if(x2>0&&x1<W&&x2>x1){cx.fillStyle=e.k=='m'?'rgba(245,165,36,.18)':'rgba(124,92,250,.15)';cx.fillRect(x1,0,x2-x1,H);cx.fillStyle='#7a5200';cx.font='600 11px Lexend,sans-serif';cx.fillText(e.k=='m'?'MOTION ARTIFACT':'LEAD-OFF',Math.max(6,x1+6),H-8)}});
+[[.3,'#2F6FED',0],[.74,'#13A89E',1]].forEach(([yy,col,r])=>{cx.beginPath();cx.strokeStyle=col;cx.lineWidth=2;for(let x=0;x<=W;x+=2){const t=n-(W-x)/sp;let m=0,fl=0,am=1;ev.forEach(e=>{if(e.b==sel&&t>=e.s&&t<=e.e){if(e.k=='m'){m=1;am=.2}else fl=1}});const p=(((t/per)+(r?.1:0))%1+1)%1;let v=r?ppg(p)*am-.5:ecg(p);if(!r&&fl)v=0;if(m)v+=(Math.sin(t*53)+.6*Math.sin(t*97))*(r?.22:.3);const y=H*yy-v*H*(r?.2:.22)+(r?H*.1:0);x?cx.lineTo(x,y):cx.moveTo(x,y)}cx.stroke()});
+cx.fillStyle='#5B6B82';cx.font='600 11px Lexend,sans-serif';cx.fillText('ECG II',8,16);cx.fillText('PLETH (SpO₂)',8,H*.52);requestAnimationFrame(draw)}
+tiles();vit();draw();setTimeout(()=>run('motion'),1800);
+</script></body></html>
