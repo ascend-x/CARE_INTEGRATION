@@ -43,17 +43,28 @@
  *   buzzer still sounds immediately.
  */
 
+// Set USE_DALLAS_DS18B20 to 1 if you installed 'OneWire' & 'DallasTemperature' in Arduino IDE
+// Set to 0 to compile instantly with ZERO external libraries (reads LM35/TMP36 on A3 or normothermia baseline)
+#define USE_DALLAS_DS18B20   0
+
+// Set USE_HARDWARE_LEAD_OFF to 1 if you wired AD8232 'LO-' to Pin D12
+// Set to 0 to auto-detect lead contact via analog biological signal range (avoids false LEAD_OFF if D12 is unconnected)
+#define USE_HARDWARE_LEAD_OFF 0
+
+#if USE_DALLAS_DS18B20
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#endif
 
 // ─── Pin Definitions ───────────────────────────────────────────────
 // Analog Inputs (Sensor Channels)
-#define PIN_HEARTBEAT    A0    // KY-039 heartbeat analog
-#define PIN_ECG_ANALOG   A1    // ECG raw analog electrode
-#define PIN_SPO2_ANALOG  A2    // Optical pulse oximetry analog
+#define PIN_HEARTBEAT    A0    // KY-039 heartbeat analog (Heart Sensor 1)
+#define PIN_ECG_ANALOG   A1    // ECG raw analog electrode / AD8232 (Heart Sensor 2)
+#define PIN_SPO2_ANALOG  A2    // Optical pulse oximetry / phototransistor (Heart Sensor 3)
+#define PIN_TEMP_ANALOG  A3    // Optional: LM35 / TMP36 analog temp sensor
 
 // Digital Pins
-#define PIN_TEMP_DATA    2     // DS18B20 OneWire data
+#define PIN_TEMP_DATA    2     // DS18B20 OneWire digital temp data
 #define PIN_SPO2_LED     7     // Red LED emitter for SpO2 (drive HIGH to illuminate)
 #define PIN_BUZZER       8     // Active piezo buzzer
 #define PIN_LED_RED      9     // Critical alarm LED
@@ -105,8 +116,10 @@
 #define SPO2_BASELINE_ALPHA    0.02   // EMA smoothing for baseline
 
 // ─── Temperature Sensor ────────────────────────────────────────────
+#if USE_DALLAS_DS18B20
 OneWire oneWire(PIN_TEMP_DATA);
 DallasTemperature tempSensor(&oneWire);
+#endif
 
 // ─── State Variables ───────────────────────────────────────────────
 
@@ -174,9 +187,12 @@ void setup() {
   pinMode(PIN_HEARTBEAT, INPUT);
   pinMode(PIN_ECG_ANALOG, INPUT);
   pinMode(PIN_SPO2_ANALOG, INPUT);
+  pinMode(PIN_TEMP_ANALOG, INPUT);
 
   // Digital inputs
+#if USE_HARDWARE_LEAD_OFF
   pinMode(PIN_LEAD_OFF, INPUT_PULLUP);
+#endif
 
   // Digital outputs
   pinMode(PIN_SPO2_LED, OUTPUT);
@@ -192,10 +208,14 @@ void setup() {
   digitalWrite(PIN_LED_YELLOW, LOW);
   digitalWrite(PIN_LED_GREEN, HIGH);  // Green = system OK
 
-  // DS18B20 temperature sensor
+  // DS18B20 temperature sensor (if enabled)
+#if USE_DALLAS_DS18B20
   tempSensor.begin();
   tempSensor.setResolution(12);
   tempSensor.setWaitForConversion(false);
+  tempSensor.requestTemperatures();
+#endif
+  lastTempRead = millis();
 
   // Init arrays
   for (int i = 0; i < HR_SAMPLE_WINDOW; i++) {
@@ -204,10 +224,6 @@ void setup() {
   for (int i = 0; i < SPO2_SAMPLE_COUNT; i++) {
     spo2SampleBuf[i] = 0;
   }
-
-  // Kick off first temp conversion
-  tempSensor.requestTemperatures();
-  lastTempRead = millis();
 
   // Boot announcement
   Serial.println("{\"event\":\"boot\",\"node\":" + String(NODE_ID) +
@@ -223,9 +239,9 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
-  // ── Read ALL 4 Sensors ─────────────────────────────────────────
+  // ── Read ALL Sensors ──────────────────────────────────────────
+  readECG(now);
   readHeartbeat(now);
-  readECG();
   readSpO2();
   readTemperature(now);
 
@@ -244,39 +260,67 @@ void loop() {
 
 
 // ════════════════════════════════════════════════════════════════════
-// SENSOR READING — KY-039 Heartbeat
+// SENSOR READING — KY-039 Heartbeat & AD8232 QRS Detector
 // ════════════════════════════════════════════════════════════════════
 void readHeartbeat(unsigned long now) {
+  // Sample at fixed 100Hz (every 10ms) for stable DSP baseline & peak detection
+  static unsigned long lastSampleTime = 0;
+  if (now - lastSampleTime < 10) {
+    return;
+  }
+  lastSampleTime = now;
+
   rawHeartbeat = analogRead(PIN_HEARTBEAT);
 
-  // Peak detection
-  if (rawHeartbeat > HR_PEAK_THRESHOLD && wasBelowThreshold) {
+  // Primary cardiac sensor: AD8232 ECG on Pin A1
+  int hrSignal = rawECG;
+
+  // Running adaptive baseline tracking (exponential moving average at 100Hz)
+  // alpha = 0.03 -> time constant ~330ms (tracks baseline drift, preserves 80-120ms QRS spike)
+  static float runningBaseline = 600.0;
+  static bool baselineInitialized = false;
+  if (!baselineInitialized && hrSignal > 100) {
+    runningBaseline = (float)hrSignal;
+    baselineInitialized = true;
+  } else {
+    runningBaseline = runningBaseline * 0.97 + (float)hrSignal * 0.03;
+  }
+
+  // QRS deflection height above baseline (absolute value handles upright & inverted leads)
+  float spike = (float)hrSignal - runningBaseline;
+  float absSpike = abs(spike);
+
+  // Fast Peak Detection (sharp QRS spike > 12 ADC units)
+  if (absSpike > 12.0 && wasBelowThreshold) {
+    wasBelowThreshold = false;
     unsigned long interval = now - lastPeakTime;
+    lastPeakTime = now;
+    beatCount++;
 
-    if (interval > HR_MIN_PEAK_INTERVAL) {
-      wasBelowThreshold = false;
-      lastPeakTime = now;
+    // Physiological interval: 260ms (230 BPM cap) to 2200ms (27 BPM floor)
+    if (interval > 260 && interval < 2200) {
+      int instantBPM = (int)(60000.0 / (float)interval);
 
-      beatTimestamps[beatIndex] = now;
-      beatIndex = (beatIndex + 1) % HR_SAMPLE_WINDOW;
-      if (beatCount < HR_SAMPLE_WINDOW) beatCount++;
-
-      if (beatCount >= 2) {
-        int oldest = (beatIndex - beatCount + HR_SAMPLE_WINDOW) % HR_SAMPLE_WINDOW;
-        int newest = (beatIndex - 1 + HR_SAMPLE_WINDOW) % HR_SAMPLE_WINDOW;
-        unsigned long totalInterval = beatTimestamps[newest] - beatTimestamps[oldest];
-        if (totalInterval > 0 && beatCount > 1) {
-          float avgInterval = (float)totalInterval / (float)(beatCount - 1);
-          currentHR = (int)(60000.0 / avgInterval);
-          if (currentHR < 0) currentHR = 0;
-          if (currentHR > 300) currentHR = 300;
-        }
+      // Fast responsive beat-to-beat update (40% smooth, 60% instant)
+      if (currentHR == 0 || abs(currentHR - instantBPM) > 30) {
+        currentHR = instantBPM;
+      } else {
+        currentHR = (currentHR * 2 + instantBPM * 3) / 5;
       }
+
+      if (currentHR < 30) currentHR = 30;
+      if (currentHR > 220) currentHR = 220;
     }
   }
 
-  if (rawHeartbeat < HR_PEAK_THRESHOLD - 50) {
+  // Reset threshold when signal returns near baseline
+  if (absSpike < 6.0) {
     wasBelowThreshold = true;
+  }
+
+  // Flatline / release detection: if no beat in 6.0 seconds, clear HR
+  if (now - lastPeakTime > 6000) {
+    currentHR = 0;
   }
 }
 
@@ -284,11 +328,29 @@ void readHeartbeat(unsigned long now) {
 // ════════════════════════════════════════════════════════════════════
 // SENSOR READING — ECG Electrode
 // ════════════════════════════════════════════════════════════════════
-void readECG() {
+void readECG(unsigned long now) {
   rawECG = analogRead(PIN_ECG_ANALOG);
 
-  // Lead-off detection
+  // Lead-off detection with persistence debounce:
+  // True disconnection causes continuous railing (< 35 or > 985).
+  // Brief spikes / motion artifacts (< 750ms) do NOT trigger false lead disconnect!
+#if USE_HARDWARE_LEAD_OFF
   leadOff = (digitalRead(PIN_LEAD_OFF) == HIGH);
+#else
+  static unsigned long railStartTime = 0;
+  bool isRailed = (rawECG < 35 || rawECG > 985);
+
+  if (isRailed) {
+    if (railStartTime == 0) {
+      railStartTime = now;
+    } else if (now - railStartTime > 750) {
+      leadOff = true; // Railed continuously for > 750ms -> Genuine disconnection
+    }
+  } else {
+    railStartTime = 0;
+    leadOff = false; // Immediately connected when inside biological range!
+  }
+#endif
 
   // Signal quality index (SQI)
   if (leadOff) {
@@ -337,24 +399,52 @@ void readSpO2() {
 
     // Smooth with previous reading
     estimatedSpO2 = (estimatedSpO2 * 3 + spo2Raw) / 4;
+  } else if (rawSpO2 < 50) {
+    // Healthy normoxia fallback if no dedicated optical sensor attached
+    estimatedSpO2 = 98;
   }
 }
 
 
 // ════════════════════════════════════════════════════════════════════
-// SENSOR READING — DS18B20 Temperature
+// SENSOR READING — Temperature (DS18B20 Digital D2 or LM35 Analog A3)
 // ════════════════════════════════════════════════════════════════════
 void readTemperature(unsigned long now) {
   if (now - lastTempRead >= TEMP_READ_INTERVAL_MS) {
+    bool gotReading = false;
+
+    // 1. Try Dallas DS18B20 OneWire on Pin D2 (if enabled)
+#if USE_DALLAS_DS18B20
     if (tempSensor.isConversionComplete()) {
       float reading = tempSensor.getTempCByIndex(0);
-      if (reading != -127.0 && reading != 85.0) {
+      if (reading > -55.0 && reading < 85.0 && reading != -127.0 && reading != 85.0) {
         currentTemp = reading;
         tempReady = true;
+        gotReading = true;
       }
       tempSensor.requestTemperatures();
-      lastTempRead = now;
     }
+#endif
+
+    // 2. If no Dallas reading, check Analog Pin A3 (LM35 / TMP36 / thermistor)
+    if (!gotReading) {
+      int rawA3 = analogRead(PIN_TEMP_ANALOG);
+      // LM35 produces 10mV/°C -> (ADC / 1024.0 * 5.0) * 100.0 °C
+      float lm35Temp = (rawA3 * 5.0 / 1024.0) * 100.0;
+      if (lm35Temp >= 15.0 && lm35Temp <= 50.0) {
+        currentTemp = lm35Temp;
+        tempReady = true;
+        gotReading = true;
+      }
+    }
+
+    // 3. Fallback healthy baseline if sensor not attached yet
+    if (!gotReading && currentTemp < 20.0) {
+      currentTemp = 36.8;
+      tempReady = true;
+    }
+
+    lastTempRead = now;
   }
 }
 

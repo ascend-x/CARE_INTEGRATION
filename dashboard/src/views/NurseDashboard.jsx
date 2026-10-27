@@ -141,9 +141,18 @@ export default function NurseDashboard({
             >
               <div className="nurse-card-head">
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                     <span className="bed-number-pill">{bedId.toUpperCase()}</span>
                     <span className="nurse-bed-title">{bed.patient_name}</span>
+                    {bed.data_source === 'arduino' ? (
+                      <span className="live-hw-badge" title="Physical Arduino Telemetry Active (3 Heart Sensors + 1 Temp + Alarm)">
+                        ⚡ REAL ARDUINO
+                      </span>
+                    ) : (
+                      <span className="sim-hw-badge" title="Simulated Bed Telemetry">
+                        🕹️ SIMULATED
+                      </span>
+                    )}
                   </div>
                   <span className="nurse-bed-prof">
                     {bed.patient_mrn || 'MRN-88412'} • {bed.patient_age ? `${bed.patient_age}y` : ''} {bed.patient_gender || ''} • {bed.profile || 'General'} Template

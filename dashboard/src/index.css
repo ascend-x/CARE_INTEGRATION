@@ -26,7 +26,7 @@ body {
   margin: 0;
   font-family: 'Lexend', system-ui, Arial, sans-serif;
   color: var(--ink);
-  background: var(--bg) radial-gradient(#cfdaec 1.2px, transparent 1.3px) 0 0/26px 26px;
+  background: #F8FAFD;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
@@ -1164,6 +1164,327 @@ button.danger {
   display: block;
   font-size: 10.5px;
   color: var(--mut);
+}
+
+/* ── Hardware Interactive Sub-Tabs ── */
+.hw-tab-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  background: #F1F5F9;
+  padding: 4px;
+  border-radius: 10px;
+  width: fit-content;
+}
+
+.hw-tab-btn {
+  padding: 7px 16px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mut);
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.hw-tab-btn:hover {
+  color: var(--ink);
+}
+
+.hw-tab-btn.active {
+  background: #fff;
+  color: var(--blue);
+  box-shadow: 0 2px 6px rgba(11,37,69,.08);
+}
+
+/* ── Pinout Table ── */
+.hw-pinout-container {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+
+.hw-pinout-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 12.5px;
+}
+
+.hw-pinout-table th {
+  background: #F8FAFD;
+  padding: 12px 16px;
+  color: var(--ink);
+  font-weight: 700;
+  border-bottom: 1px solid var(--line);
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
+.hw-pinout-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.hw-pinout-table tr:last-child td {
+  border-bottom: none;
+}
+
+.hw-pin-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 11px;
+  background: #EEF4FF;
+  color: var(--blue);
+}
+
+.hw-fail-safe-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: #FEF2F2;
+  color: var(--red);
+}
+
+/* ── Live Telemetry Serial Stream Console ── */
+.hw-telemetry-console {
+  background: #0B1528;
+  border-radius: 12px;
+  padding: 18px 22px;
+  color: #38BDF8;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  position: relative;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.4);
+}
+
+.telemetry-meta-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255,255,255,.1);
+  color: #94A3B8;
+  font-size: 11px;
+}
+
+.telemetry-status-pill {
+  color: #4ADE80;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.telemetry-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ADE80;
+  animation: pl 1.6s infinite;
+}
+
+.telemetry-json-block {
+  margin: 0;
+  overflow-x: auto;
+  color: #E2E8F0;
+}
+
+.telemetry-json-block .json-key { color: #93C5FD; }
+.telemetry-json-block .json-num { color: #F59E0B; }
+.telemetry-json-block .json-str { color: #34D399; }
+.telemetry-json-block .json-bool { color: #A78BFA; }
+
+/* ── Firmware Compilation & Upload Guide ── */
+.hw-flash-guide {
+  background: #F8FAFD;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.hw-flash-step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.flash-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--blue);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.flash-step-content {
+  flex: 1;
+}
+
+.flash-step-content strong {
+  display: block;
+  font-size: 13.5px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.flash-step-content p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--mut);
+}
+
+.flash-cmd-box {
+  background: #0B1528;
+  color: #F8FAFC;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── Ward Infrastructure Grid ── */
+.ward-infra-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.ward-bed-card {
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 12px rgba(11,37,69,.03);
+  transition: all .25s;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ward-bed-card:hover {
+  border-color: var(--blue);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(47,111,237,.08);
+}
+
+.ward-bed-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ward-bed-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ward-bed-id {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+  letter-spacing: .02em;
+}
+
+.ward-profile-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: #EEF4FF;
+  color: var(--blue);
+}
+
+.ward-status-dot-active {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 3px rgba(48,164,108,.2);
+}
+
+.ward-patient-info {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 12px;
+}
+
+.ward-patient-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 2px;
+}
+
+.ward-patient-sub {
+  font-size: 11.5px;
+  color: var(--mut);
+  margin: 0;
+}
+
+.ward-vitals-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  text-align: center;
+}
+
+.ward-mini-vital {
+  background: #F8FAFD;
+  padding: 8px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+.ward-mini-label {
+  display: block;
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--mut);
+  text-transform: uppercase;
+}
+
+.ward-mini-val {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.ward-hw-source {
+  font-size: 11px;
+  color: var(--mut);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.ward-hw-source b {
+  color: var(--ink);
 }
 
 /* Pitch Section Headings */
@@ -4589,6 +4910,138 @@ button.danger {
 
 .nurse-duty-text {
   font-weight: 500;
+}
+
+/* ── Hardware Connection Badges ── */
+.live-hw-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #ECFDF5;
+  color: #065F46;
+  border: 1px solid #A7F3D0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.sim-hw-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #F1F5F9;
+  color: #475569;
+  border: 1px solid #CBD5E1;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  letter-spacing: 0.02em;
+}
+
+/* ── Hybrid Ward Banner (Simulator View) ── */
+.hybrid-ward-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+  color: #F8FAFC;
+  border-radius: 14px;
+  padding: 18px 22px;
+  margin-bottom: 20px;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.15);
+  border: 1px solid #334155;
+}
+
+.hwb-left {
+  flex: 1;
+  min-width: 280px;
+}
+
+.hwb-status-tag {
+  margin-bottom: 8px;
+}
+
+.hwb-live-badge {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+.hwb-sim-badge {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94A3B8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  display: inline-block;
+}
+
+.hwb-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 6px 0;
+  color: #FFFFFF;
+}
+
+.hwb-desc {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #CBD5E1;
+  margin: 0;
+}
+
+.hwb-desc b {
+  color: #38BDF8;
+}
+
+.hwb-right {
+  display: flex;
+  align-items: center;
+}
+
+.hwb-stats {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hwb-stat-pill {
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 8px 14px;
+  border-radius: 10px;
+}
+
+.hwb-stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hwb-stat-val {
+  font-size: 12px;
+  font-weight: 700;
+  color: #F8FAFC;
+  margin-top: 2px;
 }
 
 

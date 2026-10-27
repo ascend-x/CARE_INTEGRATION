@@ -150,7 +150,8 @@ export default function DoctorDashboard({
       // Draw Waveform Trace
       ctx.beginPath();
       let color = '#2F6FED';
-      let channelLabel = 'ECG Lead II (Continuous Rhythm Strip)';
+      const isRealHardware = bed.data_source === 'arduino' && selectedBed === 'bed-1';
+      let channelLabel = isRealHardware ? 'ECG Lead II (Live AD8232 Hardware Telemetry)' : 'ECG Lead II (Continuous Rhythm Strip)';
       let calibration = '10 mm/mV · 25 mm/s';
 
       if (channel === 'leadV1') {
@@ -199,7 +200,8 @@ export default function DoctorDashboard({
       // Channel annotations
       ctx.fillStyle = color;
       ctx.font = '700 12px Lexend, sans-serif';
-      ctx.fillText(`${channelLabel} · HR ${hr} BPM`, 14, 22);
+      const hrText = isLeadOff ? 'LEAD OFF' : hr > 0 ? `${hr} BPM` : '-- BPM';
+      ctx.fillText(`${channelLabel} · HR ${hrText}`, 14, 22);
 
       ctx.fillStyle = '#64748B';
       ctx.font = '600 10.5px monospace';

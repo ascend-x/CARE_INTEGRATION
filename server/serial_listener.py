@@ -6,6 +6,7 @@ Reads JSON data from Arduino nodes over USB serial ports.
 Runs in background threads, one per serial port.
 """
 
+import os
 import json
 import threading
 import time
@@ -87,6 +88,11 @@ class SerialListener:
 
     def _connect(self):
         """Attempt to open the serial port."""
+        if not os.path.exists(self.port):
+            self.running = False
+            self.connected = False
+            return
+
         try:
             import serial
             self.serial_conn = serial.Serial(
@@ -186,6 +192,28 @@ class SerialManager:
     def __init__(self, on_data: Optional[Callable] = None):
         self.listeners: dict[str, SerialListener] = {}
         self.on_data = on_data
+        self.auto_scan_active = False
+        self.auto_scan_thread: Optional[threading.Thread] = None
+        self.is_flashing = False
+        self.flash_resume_time: float = 0.0
+
+    def pause_for_flash(self, seconds: float = 40.0):
+        """Temporarily release all serial ports so Arduino IDE / avrdude can flash without interference."""
+        self.is_flashing = True
+        self.flash_resume_time = time.time() + seconds
+        logger.info(f"Releasing serial port for Arduino upload ({seconds}s window)...")
+        for port, listener in list(self.listeners.items()):
+            try:
+                listener.stop()
+            except Exception as e:
+                logger.warning(f"Error stopping listener on {port}: {e}")
+        self.listeners.clear()
+
+    def resume_from_flash(self):
+        """Immediately resume auto-scanner and reconnect."""
+        self.is_flashing = False
+        self.flash_resume_time = 0.0
+        logger.info("Resuming serial auto-scanner.")
 
     def add_port(self, port: str, node_id: int, baud_rate: int = 115200):
         """Add a serial port to listen on."""
@@ -203,9 +231,60 @@ class SerialManager:
             listener.start()
 
     def stop_all(self):
-        """Stop all listeners."""
+        """Stop all listeners and auto scanner."""
+        self.auto_scan_active = False
         for listener in self.listeners.values():
             listener.stop()
+
+    def start_auto_scanner(self, interval_s: float = 3.0):
+        """Continuously check for plugged-in USB Arduinos and automatically connect."""
+        self.auto_scan_active = True
+        self.auto_scan_thread = threading.Thread(
+            target=self._auto_scan_loop,
+            args=(interval_s,),
+            name="serial-auto-scanner",
+            daemon=True,
+        )
+        self.auto_scan_thread.start()
+        logger.info("Serial auto-scanner started (scans every 3s for USB Arduinos)")
+
+    def _auto_scan_loop(self, interval_s: float):
+        standard_candidates = ["/dev/ttyUSB0", "/dev/ttyACM0", "/dev/ttyUSB1", "/dev/ttyACM1"]
+        while self.auto_scan_active:
+            if self.is_flashing:
+                if time.time() >= self.flash_resume_time:
+                    self.is_flashing = False
+                    logger.info("Flash window expired, resuming serial connections.")
+                else:
+                    time.sleep(1.0)
+                    continue
+
+            try:
+                # Prune dead listeners where USB device no longer exists
+                for port, listener in list(self.listeners.items()):
+                    if not os.path.exists(port):
+                        logger.info(f"Port {port} disconnected, cleaning up listener.")
+                        listener.stop()
+                        del self.listeners[port]
+
+                discovered = self.auto_discover()
+                for candidate in standard_candidates:
+                    if os.path.exists(candidate) and candidate not in discovered:
+                        discovered.append(candidate)
+
+                for port in discovered:
+                    if os.path.exists(port):
+                        if port not in self.listeners:
+                            logger.info(f"Auto-connecting to detected Arduino on {port} for Node 1...")
+                            self.add_port(port, node_id=1, baud_rate=115200)
+                            self.listeners[port].start()
+                        elif not self.listeners[port].connected and not self.listeners[port].running:
+                            self.listeners[port].start()
+
+            except Exception as e:
+                logger.debug(f"Auto-scan error: {e}")
+
+            time.sleep(interval_s)
 
     def get_status(self) -> dict:
         """Return the status of all serial connections."""

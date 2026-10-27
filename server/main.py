@@ -197,6 +197,16 @@ def on_data_received(packet: dict):
             profile_manager.set_profile(bed_id, profile)
 
         bed = state.beds[bed_id]
+        is_sim = packet.get("_simulated", False)
+        if not is_sim:
+            if simulator_manager:
+                simulator_manager.mark_hardware_active(node_id)
+            state.hardware_mode = True
+            bed.data_source = "arduino"
+        else:
+            if not (simulator_manager and simulator_manager.is_hardware_active(node_id)):
+                bed.data_source = "simulator"
+
         bed.vitals = vitals
         bed.node_status = NodeStatus.ONLINE
         bed.last_data_received = datetime.now()
@@ -301,6 +311,7 @@ async def _push_updates(
         "artifact_type": sq_result["artifact_type"],
         "context_label": sq_result["context_label"],
         "node_status": bed.node_status.value,
+        "data_source": bed.data_source,
         "planned_activity": bed.planned_activity,
         # Simulated device data
         "vent_pressure": vitals.vent_pressure,
@@ -319,37 +330,7 @@ async def _push_updates(
 
     # Active alarms/incidents (lower frequency — only when changed)
     if raw_packet.get("alarms"):
-        incidents_data = []
-        for incident in bed.active_incidents:
-            incidents_data.append({
-                "id": incident.id,
-                "bed_id": incident.bed_id,
-                "profile": incident.profile.value,
-                "priority": int(incident.priority),
-                "status": incident.status.value,
-                "alarm_count": incident.alarm_count,
-                "correlation_reason": incident.correlation_reason,
-                "context_label": incident.context_label,
-                "created_at": incident.created_at.isoformat(),
-                "routed_to": [r.value for r in incident.routed_to],
-                "escalation_level": incident.escalation_level,
-                "is_planned_activity": incident.is_planned_activity,
-                "alarms": [
-                    {
-                        "id": a.id,
-                        "type": a.alarm_type.value,
-                        "priority": int(a.priority),
-                        "is_tier1": a.is_tier1,
-                        "is_artifact": a.is_artifact,
-                        "artifact_confidence": a.artifact_confidence,
-                        "context_label": a.context_label,
-                        "signal_quality": a.signal_quality.value if isinstance(a.signal_quality, SignalQualityLevel) else a.signal_quality,
-                        "timestamp": a.timestamp.isoformat(),
-                    }
-                    for a in incident.alarms[-10:]  # Send only last 10 alarms
-                ],
-            })
-
+        incidents_data = [_incident_to_dict(i) for i in bed.active_incidents]
         await ws_manager.broadcast("incidents", {
             "bed_id": bed_id,
             "incidents": incidents_data,
@@ -433,17 +414,20 @@ async def lifespan(app: FastAPI):
         simulator_manager.setup_default_beds()
         simulator_manager.start()
         state.simulator_mode = True
-        logger.info("✓ Simulator mode enabled")
+        logger.info("✓ Simulator mode enabled (hybrid ready)")
 
-    # Start serial listeners
+    # Start serial listeners with hot-plug auto scanner
+    serial_manager = SerialManager(on_data=on_data_received)
     if args.serial:
         ports = args.serial.split(",")
-        serial_manager = SerialManager(on_data=on_data_received)
         for i, port in enumerate(ports):
             serial_manager.add_port(port.strip(), node_id=i + 1)
         serial_manager.start_all()
         state.hardware_mode = True
         logger.info(f"✓ Serial listeners started on: {ports}")
+
+    # Continuously scan for plugged-in Arduino Uno
+    serial_manager.start_auto_scanner(interval_s=2.5)
 
     # Start background tasks
     asyncio.create_task(escalation_checker())
@@ -494,6 +478,24 @@ async def get_system_status():
         "active_connections": ws_manager.get_connection_count(),
         "serial_status": serial_manager.get_status() if serial_manager else {},
     }
+
+
+@app.post("/api/serial/pause")
+async def pause_serial(seconds: float = 40.0):
+    """Release serial ports so Arduino IDE can flash code."""
+    if serial_manager:
+        serial_manager.pause_for_flash(seconds)
+        return {"status": "paused", "seconds": seconds, "message": f"Serial port released for {seconds}s"}
+    return {"status": "no_serial_manager"}
+
+
+@app.post("/api/serial/resume")
+async def resume_serial():
+    """Resume serial listener auto-scanner."""
+    if serial_manager:
+        serial_manager.resume_from_flash()
+        return {"status": "resumed", "message": "Serial auto-scanner resumed"}
+    return {"status": "no_serial_manager"}
 
 
 @app.get("/api/beds")
@@ -610,6 +612,7 @@ async def get_bed_vitals(bed_id: str):
                 "hr": v.heart_rate,
                 "ecg": v.ecg_value,
                 "temp": v.temperature,
+                "spo2": v.spo2 if v.spo2 is not None else (min(100, max(50, round(v.spo2_proxy / 6.0))) if v.spo2_proxy else 98),
                 "spo2_proxy": v.spo2_proxy,
                 "timestamp": v.timestamp.isoformat(),
             })
@@ -671,6 +674,9 @@ async def acknowledge_incident(incident_id: str, by: str = "Nurse"):
         raise HTTPException(status_code=404, detail="Incident not found")
 
     routing_engine.on_acknowledge(incident_id, by, Role.NURSE)
+    if incident.bed_id in state.beds:
+        state.beds[incident.bed_id].active_incidents = correlation_engine.get_active_incidents(incident.bed_id)[-20:]
+
     inc_dict = _incident_to_dict(incident)
 
     await ws_manager.broadcast("incident_ack", {
@@ -686,12 +692,33 @@ async def acknowledge_incident(incident_id: str, by: str = "Nurse"):
     return {"status": "acknowledged", "incident_id": incident_id, "incident": inc_dict}
 
 
+@app.post("/api/incidents/resolve-all")
+async def resolve_all_incidents():
+    """Resolve all active incidents across all beds."""
+    count = 0
+    for bed_id, incidents in list(correlation_engine.active_incidents.items()):
+        for inc in incidents:
+            if inc.status != IncidentStatus.RESOLVED:
+                inc.status = IncidentStatus.RESOLVED
+                inc.resolved_at = datetime.now()
+                count += 1
+        correlation_engine.active_incidents[bed_id] = []
+    for bed in state.beds.values():
+        bed.active_incidents = []
+        bed.active_alarms = []
+    await ws_manager.broadcast("incidents_cleared", {"status": "all_resolved", "count": count})
+    return {"status": "all_resolved", "count": count}
+
+
 @app.post("/api/incidents/{incident_id}/resolve")
 async def resolve_incident(incident_id: str):
     """Resolve an incident."""
     incident = correlation_engine.resolve_incident(incident_id)
     if not incident:
         raise HTTPException(status_code=404, detail="Incident not found")
+
+    if incident.bed_id in state.beds:
+        state.beds[incident.bed_id].active_incidents = correlation_engine.get_active_incidents(incident.bed_id)[-20:]
 
     inc_dict = _incident_to_dict(incident)
     await ws_manager.broadcast("incident_resolved", {
@@ -726,6 +753,9 @@ async def escalate_incident(incident_id: str, reason: str = "Manual Nurse Bedsid
     if Role.DOCTOR not in incident.routed_to:
         incident.routed_to.append(Role.DOCTOR)
     incident.correlation_reason = f"[ESCALATED TO PHYSICIAN] {incident.correlation_reason or reason}"
+
+    if incident.bed_id in state.beds:
+        state.beds[incident.bed_id].active_incidents = correlation_engine.get_active_incidents(incident.bed_id)[-20:]
 
     inc_dict = _incident_to_dict(incident)
     await ws_manager.broadcast("incident_escalated", {
@@ -1100,6 +1130,7 @@ def _bed_to_dict(bed: BedState) -> dict:
         "is_occupied": bool(bed.patient_name),
         "admitted_at": bed.admitted_at.isoformat() if bed.admitted_at else None,
         "node_status": bed.node_status.value,
+        "data_source": bed.data_source,
         "signal_quality": bed.signal_quality.value if isinstance(bed.signal_quality, SignalQualityLevel) else bed.signal_quality,
         "vitals": _vitals_to_dict(bed.vitals),
         "active_alarm_count": len(bed.active_alarms),
@@ -1118,6 +1149,7 @@ def _vitals_to_dict(v: VitalSigns) -> dict:
         "ecg": v.ecg_value,
         "ecg_quality": v.ecg_quality,
         "temp": v.temperature,
+        "spo2": v.spo2 if v.spo2 is not None else (min(100, max(50, round(v.spo2_proxy / 6.0))) if v.spo2_proxy else 98),
         "spo2_proxy": v.spo2_proxy,
         "lead_off": v.lead_off,
         "vent_pressure": v.vent_pressure,

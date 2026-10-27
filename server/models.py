@@ -267,6 +267,7 @@ class BedState:
 
     # Current state
     node_status: NodeStatus = NodeStatus.OFFLINE
+    data_source: str = "simulator"  # "arduino" (real hardware) or "simulator"
     last_data_received: Optional[datetime] = None
     vitals: VitalSigns = field(default_factory=VitalSigns)
     signal_quality: SignalQualityLevel = SignalQualityLevel.GOOD

@@ -185,6 +185,8 @@ CARE/
 ├── DOCS/
 │   └── CARE_Idea.md              # Full project specification
 ├── firmware/
+│   ├── unified_biu_node/
+│   │   └── unified_biu_node.ino  # All-in-One Node (Single-Arduino Hybrid Mode)
 │   ├── cardiac_node/
 │   │   └── cardiac_node.ino      # Arduino #1 — Cardiac bed
 │   ├── kidney_node/

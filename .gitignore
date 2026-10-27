@@ -1,0 +1,49 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+server/__pycache__/
+
+# Distribution / packaging
+build/
+dist/
+dashboard/dist/
+*.egg-info/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+server/venv/
+
+# Node / Frontend
+node_modules/
+dashboard/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Arduino build artifacts
+*.hex
+*.elf
+*.bin
+
+# Logs
+*.log

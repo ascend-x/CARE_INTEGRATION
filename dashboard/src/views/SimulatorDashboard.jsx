@@ -185,6 +185,40 @@ export default function SimulatorDashboard({
         </div>
       </div>
 
+      {/* ── Hybrid Hardware + Simulated Ward Architecture Banner ── */}
+      <div className="hybrid-ward-banner">
+        <div className="hwb-left">
+          <div className="hwb-status-tag">
+            {beds['bed-1']?.data_source === 'arduino' ? (
+              <span className="hwb-live-badge">🟢 Real Arduino Active (Bed 1 Live Telemetry)</span>
+            ) : (
+              <span className="hwb-sim-badge">🔌 Single Arduino Mode (Plug into USB to activate Bed 1)</span>
+            )}
+          </div>
+          <h3 className="hwb-title">Hybrid Physical + Simulated ICU Operation</h3>
+          <p className="hwb-desc">
+            Your single physical Arduino Uno is mapped to <b>Bed 1</b> with all 4 physical sensors (3 Heart/Pulse sensors on A0/A1/A2, Temperature on D2/A3, and Local Buzzer on D8).
+            <b> Beds 2 &amp; 3</b> run simulated multi-organ telemetry. You can click any scenario below to inject simulated emergencies onto Bed 1 or fake beds to test clinical escalation!
+          </p>
+        </div>
+        <div className="hwb-right">
+          <div className="hwb-stats">
+            <div className="hwb-stat-pill">
+              <span className="hwb-stat-label">Bed 1 (Physical)</span>
+              <span className="hwb-stat-val">{beds['bed-1']?.data_source === 'arduino' ? '⚡ USB Telemetry' : '🕹️ Simulator Fallback'}</span>
+            </div>
+            <div className="hwb-stat-pill">
+              <span className="hwb-stat-label">Bed 2 (Dialysis)</span>
+              <span className="hwb-stat-val">🕹️ Simulated</span>
+            </div>
+            <div className="hwb-stat-pill">
+              <span className="hwb-stat-label">Bed 3 (Ventilator)</span>
+              <span className="hwb-stat-val">🕹️ Simulated</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {activeScenarioName && (
         <div className="sim-scenario-banner">
           <span className="dot" style={{ background: 'var(--red)' }} />

@@ -165,6 +165,7 @@ class PatientSimulator:
             "ecg_quality": self.ecg_quality,
             "temp": round(self.temp, 1),
             "spo2_proxy": int(self.spo2_proxy),
+            "spo2": min(100, max(50, round(self.spo2_proxy / 6.0))),
             "lead_off": self.lead_off,
             "alarm_flags": 0,
             "priority": priority,
@@ -470,15 +471,31 @@ class PatientSimulator:
 
 class SimulatorManager:
     """
-    Manages patient simulators for all 3 beds.
+    Manages patient simulators for beds.
     Generates packets at 10Hz (every 100ms) like the real Arduinos.
+    Supports hybrid operation: if real physical Arduino hardware is streaming
+    for a node, pauses default background baseline for that node so real sensor
+    data is displayed, while keeping other beds simulated and allowing fake test
+    scenarios to be injected on any bed.
     """
 
     def __init__(self, on_data: Optional[Callable] = None):
         self.on_data = on_data
         self.simulators: dict[int, PatientSimulator] = {}
+        self.hardware_active_nodes: set[int] = set()
+        self.last_hardware_time: dict[int, float] = {}
         self.running = False
         self.thread: Optional[threading.Thread] = None
+
+    def mark_hardware_active(self, node_id: int):
+        """Called whenever real data arrives from a physical Arduino node."""
+        self.hardware_active_nodes.add(node_id)
+        self.last_hardware_time[node_id] = time.time()
+
+    def is_hardware_active(self, node_id: int) -> bool:
+        """Check if real hardware is actively streaming for this node (within 3s)."""
+        last_t = self.last_hardware_time.get(node_id, 0)
+        return (node_id in self.hardware_active_nodes) and (time.time() - last_t < 3.0)
 
     def setup_default_beds(self):
         """Create the 3 default bed simulators."""
@@ -506,11 +523,24 @@ class SimulatorManager:
         logger.info("Simulator stopped")
 
     def _sim_loop(self):
-        """Generate packets from all simulators at 10Hz."""
+        """Generate packets from simulators at 10Hz."""
         while self.running:
             start = time.time()
+            now = start
 
-            for sim in self.simulators.values():
+            # Clean up stale hardware nodes (> 3s without packet)
+            for node_id in list(self.hardware_active_nodes):
+                if now - self.last_hardware_time.get(node_id, 0) > 3.0:
+                    self.hardware_active_nodes.discard(node_id)
+                    logger.info(f"Hardware node {node_id} idle > 3s, resumed simulator fallback")
+
+            for node_id, sim in self.simulators.items():
+                # If physical Arduino is actively streaming on this node,
+                # only emit a simulated packet if the user explicitly triggered
+                # a test scenario (fake event injection) on it!
+                if self.is_hardware_active(node_id) and not sim.active_scenario:
+                    continue
+
                 packet = sim.generate_packet()
                 if self.on_data:
                     self.on_data(packet)

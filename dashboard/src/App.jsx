@@ -241,7 +241,32 @@ export default function App() {
       case 'incidents': {
         const bedId = msg.data.bed_id;
         const newIncidents = msg.data.incidents || [];
-        setIncidents(prev => ({ ...prev, [bedId]: newIncidents }));
+        setIncidents(prev => {
+          const currentList = prev[bedId] || [];
+          const merged = newIncidents.map(newInc => {
+            const current = currentList.find(c => c.id === newInc.id);
+            if (!current) return newInc;
+            if (current.status === 'acknowledged' && newInc.status === 'active') {
+              return {
+                ...newInc,
+                status: 'acknowledged',
+                acknowledged_by: current.acknowledged_by,
+                acknowledged_at: current.acknowledged_at,
+              };
+            }
+            if (current.status === 'escalated' && newInc.status === 'active') {
+              return {
+                ...newInc,
+                status: 'escalated',
+                escalation_level: current.escalation_level,
+                routed_to: current.routed_to,
+                correlation_reason: current.correlation_reason,
+              };
+            }
+            return newInc;
+          });
+          return { ...prev, [bedId]: merged };
+        });
 
         if (newIncidents.length > 0) {
           triggerPipeline();
@@ -526,6 +551,17 @@ export default function App() {
   };
 
   const handleDutyHandover = async (payload) => {
+    // Immediate optimistic handover
+    setDutyRoster(prev => ({
+      ...prev,
+      current_doctor: payload.new_doctor || prev.current_doctor,
+      current_doctor_title: payload.new_title || prev.current_doctor_title,
+      covering_doctor: payload.covering_doctor || prev.covering_doctor,
+      shift_name: payload.shift_name || prev.shift_name,
+      duty_status: 'active',
+      status_note: `Shift handover: ${payload.handover_note || 'Completed'}`,
+    }));
+
     try {
       const res = await fetch(`${API}/duty-roster/handover`, {
         method: 'POST',

@@ -6,6 +6,7 @@ export default function HomeView({ onNavigate, beds = {}, kpis = {} }) {
   const [compareView, setCompareView] = useState('care');
   const [crashSimActive, setCrashSimActive] = useState(false);
   const [activePipeStage, setActivePipeStage] = useState(2);
+  const [hwTab, setHwTab] = useState('diagram'); // 'diagram' | 'pinout' | 'stream' | 'flash'
 
   // ── Animated uptime counter ──
   const [uptimeSec, setUptimeSec] = useState(0);
@@ -179,92 +180,292 @@ export default function HomeView({ onNavigate, beds = {}, kpis = {} }) {
         </div>
       </section>
 
-      {/* ── HARDWARE TOPOLOGY: Single Arduino BIU ── */}
+      {/* ── HARDWARE ARCHITECTURE: Single Arduino BIU ── */}
       <section className="pitch-section">
         <div className="section-head-center">
-          <span className="subhead-pill">HARDWARE TOPOLOGY</span>
-          <h2>Unified Bedside Interface Unit</h2>
-          <p>Single Arduino Uno multiplexing 4 sensors into unified JSON telemetry at 10 Hz.</p>
+          <span className="subhead-pill">HARDWARE ARCHITECTURE</span>
+          <h2>Unified Bedside Interface Unit (Single Arduino)</h2>
+          <p>
+            Connects all 4 clinical sensors to a single Arduino Uno board, multiplexing high-frequency 
+            telemetry at 10 Hz over USB Serial with bare-metal hardware fail-safe interlocks.
+          </p>
         </div>
 
         <div className="hw-topology-card">
           <div className="hw-topo-header">
-            <div className="hw-topo-badge">LIVE HARDWARE STATUS</div>
+            <div className="hw-tab-bar">
+              <button
+                type="button"
+                className={`hw-tab-btn ${hwTab === 'diagram' ? 'active' : ''}`}
+                onClick={() => setHwTab('diagram')}
+              >
+                ⬡ Visual Block Diagram
+              </button>
+              <button
+                type="button"
+                className={`hw-tab-btn ${hwTab === 'pinout' ? 'active' : ''}`}
+                onClick={() => setHwTab('pinout')}
+              >
+                📋 Physical Pinout & Wiring Table
+              </button>
+              <button
+                type="button"
+                className={`hw-tab-btn ${hwTab === 'stream' ? 'active' : ''}`}
+                onClick={() => setHwTab('stream')}
+              >
+                ⚡ Live Serial Telemetry (JSON)
+              </button>
+              <button
+                type="button"
+                className={`hw-tab-btn ${hwTab === 'flash' ? 'active' : ''}`}
+                onClick={() => setHwTab('flash')}
+              >
+                🔧 Compile & Upload Guide
+              </button>
+            </div>
+
             <div className="hw-topo-uptime">
               <span className="hw-uptime-dot" />
-              Uptime: {fmtUp(uptimeSec)}
+              Arduino Node 1 · Uptime: {fmtUp(uptimeSec)}
             </div>
           </div>
 
-          <div className="hw-topo-grid">
-            {/* Arduino Core */}
-            <div className="hw-node-center">
-              <div className="hw-arduino-icon">⬡</div>
-              <h4>Arduino Uno R3</h4>
-              <span className="hw-subtitle">ATmega328P · 16 MHz · USB Serial</span>
-              <div className="hw-baud-tag">115200 baud · JSON packets</div>
-            </div>
+          {/* TAB 1: Visual Block Diagram */}
+          {hwTab === 'diagram' && (
+            <>
+              <div className="hw-topo-grid">
+                <div className="hw-node-center">
+                  <div className="hw-arduino-icon">⬡</div>
+                  <h4>Arduino Uno R3</h4>
+                  <span className="hw-subtitle">ATmega328P · 16 MHz · USB Serial</span>
+                  <div className="hw-baud-tag">115200 baud · JSON stream</div>
+                  <div style={{ marginTop: '10px', fontSize: '11px', color: 'var(--mut)' }}>
+                    Firmware: <b style={{ color: 'var(--ink)' }}>unified_biu_node.ino</b>
+                  </div>
+                </div>
 
-            {/* Sensor Ring */}
-            <div className="hw-sensor-ring">
-              <div className="hw-sensor-card">
-                <div className="hw-sensor-pin">A0</div>
-                <div className="hw-sensor-name">KY-039</div>
-                <div className="hw-sensor-type">Heartbeat / Pulse</div>
-                <div className="hw-sensor-stat active">Active</div>
+                <div className="hw-sensor-ring">
+                  <div className="hw-sensor-card">
+                    <div className="hw-sensor-pin">PIN A0</div>
+                    <div className="hw-sensor-name">KY-039 Optical</div>
+                    <div className="hw-sensor-type">Pulse / Heart Rate (Analog)</div>
+                    <div className="hw-sensor-stat active">Active · Real-Time Peak Detect</div>
+                  </div>
+                  <div className="hw-sensor-card">
+                    <div className="hw-sensor-pin">PIN A1</div>
+                    <div className="hw-sensor-name">Analog ECG</div>
+                    <div className="hw-sensor-type">Lead II Electrode Pair (Analog)</div>
+                    <div className="hw-sensor-stat active">Active · 10 Hz Continuous Waveform</div>
+                  </div>
+                  <div className="hw-sensor-card">
+                    <div className="hw-sensor-pin">PIN A2</div>
+                    <div className="hw-sensor-name">Optical SpO₂</div>
+                    <div className="hw-sensor-type">Phototransistor + Red Emitter (D7)</div>
+                    <div className="hw-sensor-stat active">Active · Oxygen Saturation Proxy</div>
+                  </div>
+                  <div className="hw-sensor-card">
+                    <div className="hw-sensor-pin">PIN D2</div>
+                    <div className="hw-sensor-name">DS18B20 Temp</div>
+                    <div className="hw-sensor-type">Digital OneWire Probe (4.7kΩ pull-up)</div>
+                    <div className="hw-sensor-stat active">Active · ±0.1°C Core Body Temp</div>
+                  </div>
+                </div>
               </div>
-              <div className="hw-sensor-card">
-                <div className="hw-sensor-pin">A1</div>
-                <div className="hw-sensor-name">ECG Electrode</div>
-                <div className="hw-sensor-type">Lead II Analog</div>
-                <div className="hw-sensor-stat active">Active</div>
-              </div>
-              <div className="hw-sensor-card">
-                <div className="hw-sensor-pin">A2</div>
-                <div className="hw-sensor-name">Optical SpO₂</div>
-                <div className="hw-sensor-type">Red LED + LDR</div>
-                <div className="hw-sensor-stat active">Active</div>
-              </div>
-              <div className="hw-sensor-card">
-                <div className="hw-sensor-pin">D2</div>
-                <div className="hw-sensor-name">DS18B20</div>
-                <div className="hw-sensor-type">Temperature Probe</div>
-                <div className="hw-sensor-stat active">Active</div>
-              </div>
-            </div>
-          </div>
 
-          {/* Safety Outputs */}
-          <div className="hw-safety-outputs">
-            <div className="hw-safety-item">
-              <span className="hw-safety-icon red">●</span>
-              <div>
-                <b>D9 · Red LED</b>
-                <small>Critical alarm strobe</small>
+              {/* Safety Outputs */}
+              <div className="hw-safety-outputs">
+                <div className="hw-safety-item">
+                  <span className="hw-safety-icon buzzer">🔊</span>
+                  <div>
+                    <b>D8 · Active Buzzer</b>
+                    <small>Bare-metal hardware fail-safe (Cannot be silenced by server)</small>
+                  </div>
+                </div>
+                <div className="hw-safety-item">
+                  <span className="hw-safety-icon red">🚨</span>
+                  <div>
+                    <b>D9 · Red LED</b>
+                    <small>Critical Tier 1 strobe (Asystole, V-Tach, Desaturation)</small>
+                  </div>
+                </div>
+                <div className="hw-safety-item">
+                  <span className="hw-safety-icon amber">⚠️</span>
+                  <div>
+                    <b>D10 · Yellow LED</b>
+                    <small>Medium acuity warning (Bradycardia, Mild Fever)</small>
+                  </div>
+                </div>
+                <div className="hw-safety-item">
+                  <span className="hw-safety-icon green">🟢</span>
+                  <div>
+                    <b>D11 · Green LED</b>
+                    <small>Heartbeat pulse indicator (100ms blink per detected beat)</small>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* TAB 2: Pinout Table */}
+          {hwTab === 'pinout' && (
+            <div className="hw-pinout-container">
+              <table className="hw-pinout-table">
+                <thead>
+                  <tr>
+                    <th>Arduino Pin</th>
+                    <th>Sensor / Component</th>
+                    <th>Hardware Type</th>
+                    <th>Wiring Connection</th>
+                    <th>Circuit / Resistor Notes</th>
+                    <th>Fail-Safe Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span className="hw-pin-badge">A0</span></td>
+                    <td><strong>KY-039 Pulse Sensor</strong></td>
+                    <td>Analog Input (0-1023)</td>
+                    <td>Signal → A0 · VCC → 5V · GND → GND</td>
+                    <td>Infrared phototransistor for arterial pulse detection</td>
+                    <td><span className="hw-fail-safe-tag">Local peak detection</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="hw-pin-badge">A1</span></td>
+                    <td><strong>ECG Lead II Electrode</strong></td>
+                    <td>Raw Analog Input</td>
+                    <td>RA/LA electrodes via voltage divider to A1</td>
+                    <td>Capacitive decoupling; 10-sample moving average filter</td>
+                    <td><span className="hw-fail-safe-tag">Local Flatline Buzzer (&gt;5s)</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="hw-pin-badge">A2</span></td>
+                    <td><strong>Optical SpO₂ Receiver</strong></td>
+                    <td>Analog Phototransistor</td>
+                    <td>Collector → A2 · Emitter → GND</td>
+                    <td>Paired with Red LED emitter on Pin D7 (220Ω resistor)</td>
+                    <td><span className="hw-fail-safe-tag">Desat alert if &lt;85%</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="hw-pin-badge">D2 / A3</span></td>
+                    <td><strong>Temperature Sensor (1 Temp)</strong></td>
+                    <td>Digital OneWire (D2) OR Analog (A3)</td>
+                    <td><b>DS18B20:</b> Data → D2 (4.7kΩ pull-up)<br /><b>LM35/TMP36:</b> Out → A3, VCC → 5V, GND → GND</td>
+                    <td>Supports both digital probes (D2) and zero-library analog sensors (A3) with automatic fallback</td>
+                    <td><span className="hw-fail-safe-tag">Fever alert &gt;38.5°C · Crit &gt;40°C</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="hw-pin-badge">D8</span></td>
+                    <td><strong>Active Piezo Buzzer</strong></td>
+                    <td>Digital Output (HIGH=ON)</td>
+                    <td>Positive (+) → D8 · Negative (-) → GND</td>
+                    <td>Fires immediately on hardware comparator limit; independent of host OS</td>
+                    <td><span className="hw-fail-safe-tag">Continuous Piercing Alarm</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="hw-pin-badge">D9</span></td>
+                    <td><strong>Red Warning LED</strong></td>
+                    <td>Digital Output</td>
+                    <td>Anode → D9 via 220Ω · Cathode → GND</td>
+                    <td>Strobe flashes at 2 Hz during any Tier 1 critical alarm</td>
+                    <td><span className="hw-fail-safe-tag">Visual Emergency Beacon</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="hw-pin-badge">D10</span></td>
+                    <td><strong>Yellow Warning LED</strong></td>
+                    <td>Digital Output</td>
+                    <td>Anode → D10 via 220Ω · Cathode → GND</td>
+                    <td>Steady illumination during medium clinical deviation</td>
+                    <td><span className="hw-fail-safe-tag">Warning Strobe</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="hw-pin-badge">D11</span></td>
+                    <td><strong>Green Normal LED</strong></td>
+                    <td>Digital Output</td>
+                    <td>Anode → D11 via 220Ω · Cathode → GND</td>
+                    <td>Blinks synchronously with every detected R-wave heartbeat</td>
+                    <td><span className="hw-fail-safe-tag">Rhythm Pulse Indicator</span></td>
+                  </tr>
+                  <tr>
+                    <td><span className="hw-pin-badge">D12</span></td>
+                    <td><strong>ECG Lead-Off Wire</strong></td>
+                    <td>Digital Input (INPUT_PULLUP)</td>
+                    <td>Connected to patient reference ground clip</td>
+                    <td>LOW = Electrodes Attached · HIGH = Lead Disconnected</td>
+                    <td><span className="hw-fail-safe-tag">Hardware Disconnect Alarm</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* TAB 3: Live Serial Telemetry Stream */}
+          {hwTab === 'stream' && (
+            <div className="hw-telemetry-console">
+              <div className="telemetry-meta-bar">
+                <div className="telemetry-status-pill">
+                  <span className="telemetry-live-dot" />
+                  <span>SERIAL STREAM ACTIVE · /dev/ttyUSB0 (115200 BAUD, 8N1)</span>
+                </div>
+                <span>PACKET RATE: 10.0 Hz · PACKET SIZE: 184 BYTES · CHECKSUM: VALID</span>
+              </div>
+              <pre className="telemetry-json-block">
+{`{
+  `}<span className="json-key">"node"</span>{`: `}<span className="json-num">1</span>{`,
+  `}<span className="json-key">"ts"</span>{`: `}<span className="json-num">{104520 + (uptimeSec * 1000)}</span>{`,
+  `}<span className="json-key">"profile"</span>{`: `}<span className="json-str">"unified"</span>{`,
+  `}<span className="json-key">"hr"</span>{`: `}<span className="json-num">{beds['bed-1']?.vitals?.hr || 78}</span>{`,
+  `}<span className="json-key">"hr_raw"</span>{`: `}<span className="json-num">612</span>{`,
+  `}<span className="json-key">"ecg"</span>{`: `}<span className="json-num">{beds['bed-1']?.vitals?.ecg || 512}</span>{`,
+  `}<span className="json-key">"ecg_quality"</span>{`: `}<span className="json-num">{beds['bed-1']?.vitals?.ecg_quality || 96}</span>{`,
+  `}<span className="json-key">"spo2"</span>{`: `}<span className="json-num">{beds['bed-1']?.vitals?.spo2 || 98}</span>{`,
+  `}<span className="json-key">"spo2_raw"</span>{`: `}<span className="json-num">584</span>{`,
+  `}<span className="json-key">"temp"</span>{`: `}<span className="json-num">{beds['bed-1']?.vitals?.temp || 36.9}</span>{`,
+  `}<span className="json-key">"lead_off"</span>{`: `}<span className="json-bool">false</span>{`,
+  `}<span className="json-key">"alarm_flags"</span>{`: `}<span className="json-num">0</span>{`,
+  `}<span className="json-key">"priority"</span>{`: `}<span className="json-num">0</span>{`,
+  `}<span className="json-key">"alarms"</span>{`: []
+}`}
+              </pre>
+            </div>
+          )}
+
+          {/* TAB 4: Firmware Compilation & Upload */}
+          {hwTab === 'flash' && (
+            <div className="hw-flash-guide">
+              <div className="hw-flash-step">
+                <div className="flash-step-num">1</div>
+                <div className="flash-step-content">
+                  <strong>Locate the Unified BIU Arduino Sketch</strong>
+                  <p>The complete single-Arduino 4-sensor firmware is located in your project repository at:</p>
+                  <div className="flash-cmd-box">
+                    <span>CARE/firmware/unified_biu_node/unified_biu_node.ino</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="hw-flash-step">
+                <div className="flash-step-num">2</div>
+                <div className="flash-step-content">
+                  <strong>Install Required Arduino Libraries</strong>
+                  <p>In the Arduino Library Manager (or via CLI), install the OneWire and DallasTemperature libraries for the DS18B20 sensor:</p>
+                  <div className="flash-cmd-box">
+                    <code>arduino-cli lib install "OneWire" "DallasTemperature"</code>
+                  </div>
+                </div>
+              </div>
+
+              <div className="hw-flash-step">
+                <div className="flash-step-num">3</div>
+                <div className="flash-step-content">
+                  <strong>Compile & Flash to your Arduino Uno</strong>
+                  <p>Connect your Arduino Uno via USB and execute the upload command:</p>
+                  <div className="flash-cmd-box">
+                    <code>arduino-cli compile --fqbn arduino:avr:uno firmware/unified_biu_node && arduino-cli upload -p /dev/ttyUSB0 --fqbn arduino:avr:uno firmware/unified_biu_node</code>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="hw-safety-item">
-              <span className="hw-safety-icon amber">●</span>
-              <div>
-                <b>D10 · Yellow LED</b>
-                <small>Medium alarm indicator</small>
-              </div>
-            </div>
-            <div className="hw-safety-item">
-              <span className="hw-safety-icon green">●</span>
-              <div>
-                <b>D11 · Green LED</b>
-                <small>System normal indicator</small>
-              </div>
-            </div>
-            <div className="hw-safety-item">
-              <span className="hw-safety-icon buzzer">◉</span>
-              <div>
-                <b>D8 · Piezo Buzzer</b>
-                <small>Independent safety alarm</small>
-              </div>
-            </div>
-          </div>
+          )}
         </div>
       </section>
 
@@ -291,6 +492,113 @@ export default function HomeView({ onNavigate, beds = {}, kpis = {} }) {
           <small className="kpi-note">Hardware buzzer never silenced</small>
         </div>
       </div>
+
+      {/* ── HOSPITAL WARD TELEMETRY INFRASTRUCTURE ── */}
+      <section className="pitch-section">
+        <div className="section-head-center">
+          <span className="subhead-pill">HOSPITAL INFRASTRUCTURE</span>
+          <h2>Ward 4B Critical Care Telemetry Bays</h2>
+          <p>Real-time status of bedside interface units connected across the ward edge network.</p>
+        </div>
+
+        <div className="ward-infra-grid">
+          {/* BED 01 */}
+          <div className="ward-bed-card" onClick={() => onNavigate('doctor')}>
+            <div className="ward-bed-top">
+              <div className="ward-bed-title">
+                <span className="ward-status-dot-active" />
+                <span className="ward-bed-id">BED-01 · CCU</span>
+              </div>
+              <span className="ward-profile-tag">Unified BIU (4 Sensors)</span>
+            </div>
+            <div className="ward-patient-info">
+              <h4 className="ward-patient-name">{beds['bed-1']?.patient_name || 'Robert Vance'}</h4>
+              <p className="ward-patient-sub">68y M · {beds['bed-1']?.diagnosis || 'Acute Anterior STEMI post-PCI'}</p>
+            </div>
+            <div className="ward-vitals-mini-grid">
+              <div className="ward-mini-vital">
+                <span className="ward-mini-label">HR</span>
+                <span className="ward-mini-val" style={{ color: 'var(--red)' }}>{beds['bed-1']?.vitals?.hr || 78} <small style={{ fontSize: '10px' }}>BPM</small></span>
+              </div>
+              <div className="ward-mini-vital">
+                <span className="ward-mini-label">SpO₂</span>
+                <span className="ward-mini-val" style={{ color: 'var(--blue)' }}>{beds['bed-1']?.vitals?.spo2 || 98}%</span>
+              </div>
+              <div className="ward-mini-vital">
+                <span className="ward-mini-label">Temp</span>
+                <span className="ward-mini-val" style={{ color: 'var(--teal)' }}>{beds['bed-1']?.vitals?.temp || 36.9}°C</span>
+              </div>
+            </div>
+            <div className="ward-hw-source">
+              <span>🔌 Hardware: <b>Single Arduino Uno Node (/dev/ttyUSB0)</b></span>
+            </div>
+          </div>
+
+          {/* BED 02 */}
+          <div className="ward-bed-card" onClick={() => onNavigate('nurse')}>
+            <div className="ward-bed-top">
+              <div className="ward-bed-title">
+                <span className="ward-status-dot-active" />
+                <span className="ward-bed-id">BED-02 · DIALYSIS</span>
+              </div>
+              <span className="ward-profile-tag" style={{ background: '#FEF3C7', color: '#B45309' }}>Kidney / Dialysis Profile</span>
+            </div>
+            <div className="ward-patient-info">
+              <h4 className="ward-patient-name">{beds['bed-2']?.patient_name || 'Maria Santos'}</h4>
+              <p className="ward-patient-sub">54y F · {beds['bed-2']?.diagnosis || 'ESRD on HD · Fluid Overload'}</p>
+            </div>
+            <div className="ward-vitals-mini-grid">
+              <div className="ward-mini-vital">
+                <span className="ward-mini-label">HR</span>
+                <span className="ward-mini-val">{beds['bed-2']?.vitals?.hr || 84} <small style={{ fontSize: '10px' }}>BPM</small></span>
+              </div>
+              <div className="ward-mini-vital">
+                <span className="ward-mini-label">Venous P</span>
+                <span className="ward-mini-val" style={{ color: 'var(--vio)' }}>{beds['bed-2']?.vitals?.dial_venous_pressure || 120} <small style={{ fontSize: '10px' }}>mmHg</small></span>
+              </div>
+              <div className="ward-mini-vital">
+                <span className="ward-mini-label">Blood Flow</span>
+                <span className="ward-mini-val" style={{ color: 'var(--teal)' }}>{beds['bed-2']?.vitals?.dial_blood_flow || 350} <small style={{ fontSize: '10px' }}>mL/m</small></span>
+              </div>
+            </div>
+            <div className="ward-hw-source">
+              <span>🩸 Interlock: <b>Blood Leak Optical Detector Armed</b></span>
+            </div>
+          </div>
+
+          {/* BED 03 */}
+          <div className="ward-bed-card" onClick={() => onNavigate('doctor')}>
+            <div className="ward-bed-top">
+              <div className="ward-bed-title">
+                <span className="ward-status-dot-active" />
+                <span className="ward-bed-id">BED-03 · STEP-DOWN</span>
+              </div>
+              <span className="ward-profile-tag" style={{ background: '#E0F2FE', color: '#0369A1' }}>Respiratory Profile</span>
+            </div>
+            <div className="ward-patient-info">
+              <h4 className="ward-patient-name">{beds['bed-3']?.patient_name || 'Arthur Pendelton'}</h4>
+              <p className="ward-patient-sub">72y M · {beds['bed-3']?.diagnosis || 'COPD Exacerbation / ARDS'}</p>
+            </div>
+            <div className="ward-vitals-mini-grid">
+              <div className="ward-mini-vital">
+                <span className="ward-mini-label">SpO₂</span>
+                <span className="ward-mini-val" style={{ color: 'var(--blue)' }}>{beds['bed-3']?.vitals?.spo2 || 94}%</span>
+              </div>
+              <div className="ward-mini-vital">
+                <span className="ward-mini-label">PEEP</span>
+                <span className="ward-mini-val" style={{ color: 'var(--ink)' }}>{beds['bed-3']?.vitals?.vent_pressure || 8.0} <small style={{ fontSize: '10px' }}>cmH₂O</small></span>
+              </div>
+              <div className="ward-mini-vital">
+                <span className="ward-mini-label">FiO₂</span>
+                <span className="ward-mini-val" style={{ color: 'var(--green)' }}>{Math.round((beds['bed-3']?.vitals?.vent_fio2 || 0.40) * 100)}%</span>
+              </div>
+            </div>
+            <div className="ward-hw-source">
+              <span>🫁 Interlock: <b>Ventilator Disconnect Guard Armed</b></span>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* ── Before vs After ── */}
       <section className="pitch-section">
