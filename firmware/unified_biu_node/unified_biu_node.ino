@@ -266,9 +266,6 @@ void loop() {
 // ════════════════════════════════════════════════════════════════════
 // SENSOR READING — KY-039 Heartbeat & AD8232 QRS Detector (Pan-Tompkins DSP)
 // ════════════════════════════════════════════════════════════════════
-// ════════════════════════════════════════════════════════════════════
-// SENSOR READING — KY-039 Heartbeat & AD8232 QRS Detector (Pan-Tompkins DSP)
-// ════════════════════════════════════════════════════════════════════
 #define RR_BUFFER_SIZE 5
 static unsigned long rrIntervals[RR_BUFFER_SIZE] = {800, 800, 800, 800, 800};
 static int rrIndex = 0;
