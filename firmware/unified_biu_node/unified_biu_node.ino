@@ -266,101 +266,139 @@ void loop() {
 // ════════════════════════════════════════════════════════════════════
 // SENSOR READING — KY-039 Heartbeat & AD8232 QRS Detector (Pan-Tompkins DSP)
 // ════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════
+// SENSOR READING — KY-039 Heartbeat & AD8232 QRS Detector (Pan-Tompkins DSP)
+// ════════════════════════════════════════════════════════════════════
 #define RR_BUFFER_SIZE 5
 static unsigned long rrIntervals[RR_BUFFER_SIZE] = {800, 800, 800, 800, 800};
 static int rrIndex = 0;
 static int validBeatCount = 0;
-static int lastStableBPM = 74;
+static int lastStableBPM = 72;
 static unsigned long lastValidBeatMs = 0;
 static unsigned long refractoryUntil = 0;
 
+// Pan-Tompkins DSP state variables
+static int ptPrevSample = 330;
+static long ptPrevEnergy = 0;
+static long ptEnergyThreshold = 180;
+static bool ptInPeak = false;
+static unsigned long ptLastDecay = 0;
+
 void readHeartbeat(unsigned long now) {
-  // Sample at fixed 100Hz (every 10ms) for stable DSP
+  // Sample at fixed 100Hz (every 10ms) for high-precision DSP
   static unsigned long lastSampleTime = 0;
   if (now - lastSampleTime < 10) return;
   lastSampleTime = now;
 
-  rawHeartbeat = analogRead(PIN_HEARTBEAT);
-
-  // Locked directly to AD8232 ECG on Pin A1 (no floating A0 fallback)
+  // Signal source: Pin A1 (AD8232 ECG)
   int hrSignal = rawECG;
+  rawHeartbeat = rawECG; // Synchronize hr_raw with actual sensor
 
-  // 1. Two-point differential slope filter: highlights fast QRS, completely rejects baseline wander
-  static int prevSample1 = 512;
-  static int prevSample2 = 512;
-  int slope = abs(hrSignal - prevSample2);
-  prevSample2 = prevSample1;
-  prevSample1 = hrSignal;
-
-  // 2. Adaptive running baseline tracking
-  static float runningBaseline = 600.0;
-  runningBaseline = runningBaseline * 0.95 + (float)hrSignal * 0.05;
-  float spike = abs((float)hrSignal - runningBaseline);
-
-  // 3. Adaptive slope threshold (robust against 50Hz mains noise)
-  static int slopeThreshold = 22;
-  static unsigned long lastDecayTime = 0;
-  if (now - lastDecayTime > 1500) {
-    if (slopeThreshold > 16) slopeThreshold--;
-    lastDecayTime = now;
-  }
-
-  // 4. QRS Detection Check:
-  // Must have sharp QRS slope (> 16-22) AND outside 420ms cardiac refractory period
-  bool qrsDetected = (slope >= slopeThreshold || spike > 20.0) && (now >= refractoryUntil);
-
-  if (qrsDetected && !leadOff) {
-    // 420ms cardiac refractory period: completely blocks T-waves (250-380ms) and 50Hz hum!
-    refractoryUntil = now + 420;
-
-    unsigned long interval = now - lastPeakTime;
-    lastPeakTime = now;
-    lastValidBeatMs = now;
-    beatCount++;
-
-    // Adapt threshold: 60% of current slope peak (clamped between 16 and 50)
-    if (slope > 18) {
-      slopeThreshold = (slopeThreshold * 6 + slope * 4) / 10;
-      if (slopeThreshold < 16) slopeThreshold = 16;
-      if (slopeThreshold > 50) slopeThreshold = 50;
-    }
-
-    // Physiological interval validation (400ms to 1600ms -> 37 to 150 BPM)
-    if (interval >= 400 && interval <= 1600) {
-      rrIntervals[rrIndex] = interval;
-      rrIndex = (rrIndex + 1) % RR_BUFFER_SIZE;
-      validBeatCount = min(validBeatCount + 1, RR_BUFFER_SIZE);
-
-      // Compute MEDIAN of last 5 intervals (eliminates noise spikes & missed pulses!)
-      unsigned long sorted[RR_BUFFER_SIZE];
-      for (int i = 0; i < RR_BUFFER_SIZE; i++) sorted[i] = rrIntervals[i];
-      for (int i = 1; i < RR_BUFFER_SIZE; i++) {
-        unsigned long key = sorted[i];
-        int j = i - 1;
-        while (j >= 0 && sorted[j] > key) {
-          sorted[j + 1] = sorted[j];
-          j--;
-        }
-        sorted[j + 1] = key;
-      }
-      unsigned long medianInterval = sorted[RR_BUFFER_SIZE / 2];
-
-      int instantBPM = (int)(60000.0 / (float)medianInterval);
-      if (instantBPM >= 40 && instantBPM <= 150) {
-        lastStableBPM = instantBPM;
-        currentHR = instantBPM;
-      }
-    }
-  }
-
-  // 5. Heart Rate Hold Logic:
-  // Shows '--' only when leads are genuinely off (< 150 or > 920 ADC)
+  // If lead is genuinely off, reset DSP filter and zero HR
   if (leadOff) {
     currentHR = 0;
-  } else if (now - lastValidBeatMs > 10000) {
-    currentHR = 0; // True asystole after 10s
+    validBeatCount = 0;
+    lastPeakTime = 0;
+    ptInPeak = false;
+    ptPrevSample = hrSignal;
+    ptPrevEnergy = 0;
+    ptEnergyThreshold = 180;
+    return;
+  }
+
+  // 1. First Derivative:
+  // Eliminates DC offset and respiration baseline drift (< 2Hz)
+  int diff = hrSignal - ptPrevSample;
+  ptPrevSample = hrSignal;
+
+  // 2. Non-linear Squaring:
+  // Magnifies steep QRS slopes (diff >= 25 -> energy >= 625)
+  // Completely squashes slow T-waves (diff <= 6 -> energy <= 36) and drift
+  long energy = (long)diff * diff;
+
+  // 3. Adaptive threshold decay:
+  // Slowly decays threshold so weaker pulses can still trigger cleanly
+  if (now - ptLastDecay > 1200) {
+    if (ptEnergyThreshold > 110) {
+      ptEnergyThreshold -= 15;
+    }
+    ptLastDecay = now;
+  }
+
+  // 4. True R-Wave Apex Detection (Peak Confirmation):
+  // Must exceed energy threshold, be outside 320ms cardiac refractory period,
+  // and must show derivative sign inversion (energy starts falling after apex)
+  bool isCandidatePeak = (ptPrevEnergy >= ptEnergyThreshold) && 
+                         (energy < ptPrevEnergy) && 
+                         (now >= refractoryUntil) && 
+                         (!ptInPeak);
+
+  if (isCandidatePeak) {
+    ptInPeak = true;
+    refractoryUntil = now + 320; // 320ms refractory period (prevents T-wave double counts, allows up to 185 BPM)
+
+    // Dynamically adapt threshold based on detected peak energy
+    long peakEnergy = ptPrevEnergy;
+    ptEnergyThreshold = (ptEnergyThreshold * 7 + (peakEnergy / 3) * 3) / 10;
+    if (ptEnergyThreshold < 110) ptEnergyThreshold = 110;
+    if (ptEnergyThreshold > 1800) ptEnergyThreshold = 1800;
+
+    // RR interval calculation
+    if (lastPeakTime > 0) {
+      unsigned long interval = now - lastPeakTime;
+
+      // Physiological human RR range: 350ms (171 BPM) to 1500ms (40 BPM)
+      if (interval >= 350 && interval <= 1500) {
+        int instantBPM = (int)(60000UL / interval);
+
+        // Reject single wild motion artifact jumps (> 45 BPM) unless first beat
+        if (validBeatCount == 0 || abs(instantBPM - lastStableBPM) <= 45 || (now - lastValidBeatMs > 5000)) {
+          rrIntervals[rrIndex] = interval;
+          rrIndex = (rrIndex + 1) % RR_BUFFER_SIZE;
+          validBeatCount = min(validBeatCount + 1, RR_BUFFER_SIZE);
+          beatCount++;
+          lastValidBeatMs = now;
+
+          // Median filter over valid beats (eliminates jitter)
+          unsigned long sorted[RR_BUFFER_SIZE];
+          for (int i = 0; i < validBeatCount; i++) sorted[i] = rrIntervals[i];
+          for (int i = 1; i < validBeatCount; i++) {
+            unsigned long key = sorted[i];
+            int j = i - 1;
+            while (j >= 0 && sorted[j] > key) {
+              sorted[j + 1] = sorted[j];
+              j--;
+            }
+            sorted[j + 1] = key;
+          }
+          unsigned long medianInterval = sorted[validBeatCount / 2];
+
+          int calculatedBPM = (int)(60000UL / medianInterval);
+          if (calculatedBPM >= 40 && calculatedBPM <= 175) {
+            lastStableBPM = calculatedBPM;
+            currentHR = calculatedBPM;
+          }
+        }
+      }
+    }
+
+    lastPeakTime = now;
+  }
+
+  // Reset peak flag once energy falls back below half threshold
+  if (energy < ptEnergyThreshold / 2) {
+    ptInPeak = false;
+  }
+
+  ptPrevEnergy = energy;
+
+  // 5. Clinical Display Hold:
+  // When leads are on skin, NEVER flicker '--' between beats!
+  // Hold lastStableBPM steady for up to 12 seconds
+  if (lastValidBeatMs > 0 && (now - lastValidBeatMs > 12000)) {
+    currentHR = 0; // True flatline/asystole after 12s without pulse
   } else if (currentHR == 0 && validBeatCount > 0) {
-    currentHR = lastStableBPM; // Hold steady reading
+    currentHR = lastStableBPM; // Hold steady clinical reading
   }
 }
 
@@ -372,19 +410,19 @@ void readECG(unsigned long now) {
   rawECG = analogRead(PIN_ECG_ANALOG);
 
   // Lead-off detection with persistence debounce:
-  // On skin: AD8232 sits at mid-rail (180 to 880 ADC).
-  // Disconnected / on desk: rails to ground (< 150) or supply (> 920).
+  // On skin: AD8232 sits biased around 1.65V (ADC 200 to 750).
+  // Disconnected / on desk: rails to ground (< 35) or supply (> 960).
 #if USE_HARDWARE_LEAD_OFF
   leadOff = (digitalRead(PIN_LEAD_OFF) == HIGH);
 #else
   static unsigned long railStartTime = 0;
-  bool isRailed = (rawECG < 150 || rawECG > 920);
+  bool isRailed = (rawECG < 35 || rawECG > 960);
 
   if (isRailed) {
     if (railStartTime == 0) {
       railStartTime = now;
-    } else if (now - railStartTime > 800) {
-      leadOff = true; // Railed continuously for > 800ms -> Genuine disconnection
+    } else if (now - railStartTime > 1800) {
+      leadOff = true; // Railed continuously for > 1.8s -> Genuine disconnection
     }
   } else {
     railStartTime = 0;
@@ -502,7 +540,7 @@ void evaluateAlarms(unsigned long now) {
   alarmPriority = 0;
 
   // ── Heart Rate ─────────────────────────────────────────────────
-  if (beatCount > 0 && (now - lastPeakTime > HR_FLATLINE_MS)) {
+  if (!leadOff && beatCount > 0 && (now - lastPeakTime > HR_FLATLINE_MS)) {
     activeAlarms |= ALARM_FLATLINE;
     alarmPriority = 3;
   }
