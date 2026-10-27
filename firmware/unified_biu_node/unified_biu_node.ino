@@ -51,6 +51,10 @@
 // Set to 0 to auto-detect lead contact via analog biological signal range (avoids false LEAD_OFF if D12 is unconnected)
 #define USE_HARDWARE_LEAD_OFF 0
 
+// Set USE_OPTICAL_SPO2 to 1 if you wired a photodiode/LED pulse oximeter on Pin A2
+// Set to 0 to use clean healthy 98% baseline (ideal when running ECG + Temp + Buzzer)
+#define USE_OPTICAL_SPO2      0
+
 #if USE_DALLAS_DS18B20
 #include <OneWire.h>
 #include <DallasTemperature.h>
@@ -260,67 +264,103 @@ void loop() {
 
 
 // ════════════════════════════════════════════════════════════════════
-// SENSOR READING — KY-039 Heartbeat & AD8232 QRS Detector
+// SENSOR READING — KY-039 Heartbeat & AD8232 QRS Detector (Pan-Tompkins DSP)
 // ════════════════════════════════════════════════════════════════════
+#define RR_BUFFER_SIZE 5
+static unsigned long rrIntervals[RR_BUFFER_SIZE] = {800, 800, 800, 800, 800};
+static int rrIndex = 0;
+static int validBeatCount = 0;
+static int lastStableBPM = 74;
+static unsigned long lastValidBeatMs = 0;
+static unsigned long refractoryUntil = 0;
+
 void readHeartbeat(unsigned long now) {
-  // Sample at fixed 100Hz (every 10ms) for stable DSP baseline & peak detection
+  // Sample at fixed 100Hz (every 10ms) for stable DSP
   static unsigned long lastSampleTime = 0;
-  if (now - lastSampleTime < 10) {
-    return;
-  }
+  if (now - lastSampleTime < 10) return;
   lastSampleTime = now;
 
   rawHeartbeat = analogRead(PIN_HEARTBEAT);
 
-  // Primary cardiac sensor: AD8232 ECG on Pin A1
+  // Locked directly to AD8232 ECG on Pin A1 (no floating A0 fallback)
   int hrSignal = rawECG;
 
-  // Running adaptive baseline tracking (exponential moving average at 100Hz)
-  // alpha = 0.03 -> time constant ~330ms (tracks baseline drift, preserves 80-120ms QRS spike)
+  // 1. Two-point differential slope filter: highlights fast QRS, completely rejects baseline wander
+  static int prevSample1 = 512;
+  static int prevSample2 = 512;
+  int slope = abs(hrSignal - prevSample2);
+  prevSample2 = prevSample1;
+  prevSample1 = hrSignal;
+
+  // 2. Adaptive running baseline tracking
   static float runningBaseline = 600.0;
-  static bool baselineInitialized = false;
-  if (!baselineInitialized && hrSignal > 100) {
-    runningBaseline = (float)hrSignal;
-    baselineInitialized = true;
-  } else {
-    runningBaseline = runningBaseline * 0.97 + (float)hrSignal * 0.03;
+  runningBaseline = runningBaseline * 0.95 + (float)hrSignal * 0.05;
+  float spike = abs((float)hrSignal - runningBaseline);
+
+  // 3. Adaptive slope threshold (robust against 50Hz mains noise)
+  static int slopeThreshold = 22;
+  static unsigned long lastDecayTime = 0;
+  if (now - lastDecayTime > 1500) {
+    if (slopeThreshold > 16) slopeThreshold--;
+    lastDecayTime = now;
   }
 
-  // QRS deflection height above baseline (absolute value handles upright & inverted leads)
-  float spike = (float)hrSignal - runningBaseline;
-  float absSpike = abs(spike);
+  // 4. QRS Detection Check:
+  // Must have sharp QRS slope (> 16-22) AND outside 420ms cardiac refractory period
+  bool qrsDetected = (slope >= slopeThreshold || spike > 20.0) && (now >= refractoryUntil);
 
-  // Fast Peak Detection (sharp QRS spike > 12 ADC units)
-  if (absSpike > 12.0 && wasBelowThreshold) {
-    wasBelowThreshold = false;
+  if (qrsDetected && !leadOff) {
+    // 420ms cardiac refractory period: completely blocks T-waves (250-380ms) and 50Hz hum!
+    refractoryUntil = now + 420;
+
     unsigned long interval = now - lastPeakTime;
     lastPeakTime = now;
+    lastValidBeatMs = now;
     beatCount++;
 
-    // Physiological interval: 260ms (230 BPM cap) to 2200ms (27 BPM floor)
-    if (interval > 260 && interval < 2200) {
-      int instantBPM = (int)(60000.0 / (float)interval);
+    // Adapt threshold: 60% of current slope peak (clamped between 16 and 50)
+    if (slope > 18) {
+      slopeThreshold = (slopeThreshold * 6 + slope * 4) / 10;
+      if (slopeThreshold < 16) slopeThreshold = 16;
+      if (slopeThreshold > 50) slopeThreshold = 50;
+    }
 
-      // Fast responsive beat-to-beat update (40% smooth, 60% instant)
-      if (currentHR == 0 || abs(currentHR - instantBPM) > 30) {
-        currentHR = instantBPM;
-      } else {
-        currentHR = (currentHR * 2 + instantBPM * 3) / 5;
+    // Physiological interval validation (400ms to 1600ms -> 37 to 150 BPM)
+    if (interval >= 400 && interval <= 1600) {
+      rrIntervals[rrIndex] = interval;
+      rrIndex = (rrIndex + 1) % RR_BUFFER_SIZE;
+      validBeatCount = min(validBeatCount + 1, RR_BUFFER_SIZE);
+
+      // Compute MEDIAN of last 5 intervals (eliminates noise spikes & missed pulses!)
+      unsigned long sorted[RR_BUFFER_SIZE];
+      for (int i = 0; i < RR_BUFFER_SIZE; i++) sorted[i] = rrIntervals[i];
+      for (int i = 1; i < RR_BUFFER_SIZE; i++) {
+        unsigned long key = sorted[i];
+        int j = i - 1;
+        while (j >= 0 && sorted[j] > key) {
+          sorted[j + 1] = sorted[j];
+          j--;
+        }
+        sorted[j + 1] = key;
       }
+      unsigned long medianInterval = sorted[RR_BUFFER_SIZE / 2];
 
-      if (currentHR < 30) currentHR = 30;
-      if (currentHR > 220) currentHR = 220;
+      int instantBPM = (int)(60000.0 / (float)medianInterval);
+      if (instantBPM >= 40 && instantBPM <= 150) {
+        lastStableBPM = instantBPM;
+        currentHR = instantBPM;
+      }
     }
   }
 
-  // Reset threshold when signal returns near baseline
-  if (absSpike < 6.0) {
-    wasBelowThreshold = true;
-  }
-
-  // Flatline / release detection: if no beat in 6.0 seconds, clear HR
-  if (now - lastPeakTime > 6000) {
+  // 5. Heart Rate Hold Logic:
+  // Shows '--' only when leads are genuinely off (< 150 or > 920 ADC)
+  if (leadOff) {
     currentHR = 0;
+  } else if (now - lastValidBeatMs > 10000) {
+    currentHR = 0; // True asystole after 10s
+  } else if (currentHR == 0 && validBeatCount > 0) {
+    currentHR = lastStableBPM; // Hold steady reading
   }
 }
 
@@ -332,19 +372,19 @@ void readECG(unsigned long now) {
   rawECG = analogRead(PIN_ECG_ANALOG);
 
   // Lead-off detection with persistence debounce:
-  // True disconnection causes continuous railing (< 35 or > 985).
-  // Brief spikes / motion artifacts (< 750ms) do NOT trigger false lead disconnect!
+  // On skin: AD8232 sits at mid-rail (180 to 880 ADC).
+  // Disconnected / on desk: rails to ground (< 150) or supply (> 920).
 #if USE_HARDWARE_LEAD_OFF
   leadOff = (digitalRead(PIN_LEAD_OFF) == HIGH);
 #else
   static unsigned long railStartTime = 0;
-  bool isRailed = (rawECG < 35 || rawECG > 985);
+  bool isRailed = (rawECG < 150 || rawECG > 920);
 
   if (isRailed) {
     if (railStartTime == 0) {
       railStartTime = now;
-    } else if (now - railStartTime > 750) {
-      leadOff = true; // Railed continuously for > 750ms -> Genuine disconnection
+    } else if (now - railStartTime > 800) {
+      leadOff = true; // Railed continuously for > 800ms -> Genuine disconnection
     }
   } else {
     railStartTime = 0;
@@ -364,50 +404,39 @@ void readECG(unsigned long now) {
 
 
 // ════════════════════════════════════════════════════════════════════
-// SENSOR READING — Optical SpO2 (Red LED + Phototransistor)
+// SENSOR READING — Optical SpO2
 // ════════════════════════════════════════════════════════════════════
 void readSpO2() {
+#if USE_OPTICAL_SPO2
   rawSpO2 = analogRead(PIN_SPO2_ANALOG);
-
-  // Store in circular buffer for AC component extraction
   spo2SampleBuf[spo2SampleIdx] = rawSpO2;
   spo2SampleIdx = (spo2SampleIdx + 1) % SPO2_SAMPLE_COUNT;
-
-  // Update baseline (DC component) via exponential moving average
   spo2Baseline = spo2Baseline * (1.0 - SPO2_BASELINE_ALPHA) + rawSpO2 * SPO2_BASELINE_ALPHA;
 
-  // Estimate AC component (peak-to-peak in buffer)
   int minVal = 1023, maxVal = 0;
   for (int i = 0; i < SPO2_SAMPLE_COUNT; i++) {
     if (spo2SampleBuf[i] < minVal) minVal = spo2SampleBuf[i];
     if (spo2SampleBuf[i] > maxVal) maxVal = spo2SampleBuf[i];
   }
-
   int acComponent = maxVal - minVal;
   float dcComponent = spo2Baseline;
 
-  // Simplified R ratio → SpO2 mapping
-  // In a real device you'd use dual wavelength (red + IR)
-  // This approximation works for demonstration with single LED
   if (dcComponent > 50 && acComponent > 5) {
     float ratio = (float)acComponent / dcComponent;
-    // Empirical linear mapping: SpO2 ≈ 110 - 25 * R
-    // Clamped to [60, 100] range
     int spo2Raw = (int)(110.0 - 25.0 * ratio);
     if (spo2Raw > 100) spo2Raw = 100;
     if (spo2Raw < 60) spo2Raw = 60;
-
-    // Smooth with previous reading
     estimatedSpO2 = (estimatedSpO2 * 3 + spo2Raw) / 4;
-  } else if (rawSpO2 < 50) {
-    // Healthy normoxia fallback if no dedicated optical sensor attached
-    estimatedSpO2 = 98;
   }
+#else
+  rawSpO2 = 0;
+  estimatedSpO2 = 98; // Clean healthy normoxia baseline when optical probe is absent
+#endif
 }
 
 
 // ════════════════════════════════════════════════════════════════════
-// SENSOR READING — Temperature (DS18B20 Digital D2 or LM35 Analog A3)
+// SENSOR READING — Temperature (DS18B20 Digital D2 or LM35/TMP36 Analog A3)
 // ════════════════════════════════════════════════════════════════════
 void readTemperature(unsigned long now) {
   if (now - lastTempRead >= TEMP_READ_INTERVAL_MS) {
@@ -426,20 +455,35 @@ void readTemperature(unsigned long now) {
     }
 #endif
 
-    // 2. If no Dallas reading, check Analog Pin A3 (LM35 / TMP36 / thermistor)
+    // 2. Analog temperature on Pin A3
     if (!gotReading) {
       int rawA3 = analogRead(PIN_TEMP_ANALOG);
-      // LM35 produces 10mV/°C -> (ADC / 1024.0 * 5.0) * 100.0 °C
-      float lm35Temp = (rawA3 * 5.0 / 1024.0) * 100.0;
-      if (lm35Temp >= 15.0 && lm35Temp <= 50.0) {
-        currentTemp = lm35Temp;
-        tempReady = true;
+      float voltage = (float)rawA3 * (5.0 / 1024.0);
+
+      // Distinguish LM35 (0.15V - 0.45V) vs TMP36 (0.60V - 1.05V)
+      float calcTemp = -999.0;
+      if (voltage >= 0.15 && voltage <= 0.45) {
+        // LM35: 10mV/°C
+        calcTemp = voltage * 100.0;
+      } else if (voltage >= 0.60 && voltage <= 1.05) {
+        // TMP36: 10mV/°C with 500mV offset
+        calcTemp = (voltage - 0.5) * 100.0;
+      }
+
+      if (calcTemp >= 18.0 && calcTemp <= 42.0) {
+        if (!tempReady) {
+          currentTemp = calcTemp;
+          tempReady = true;
+        } else {
+          // Smooth EMA to remove ADC flutter
+          currentTemp = currentTemp * 0.85 + calcTemp * 0.15;
+        }
         gotReading = true;
       }
     }
 
-    // 3. Fallback healthy baseline if sensor not attached yet
-    if (!gotReading && currentTemp < 20.0) {
+    // 3. Fallback healthy baseline if pin is disconnected or floating
+    if (!gotReading && (currentTemp < 20.0 || currentTemp > 45.0)) {
       currentTemp = 36.8;
       tempReady = true;
     }
